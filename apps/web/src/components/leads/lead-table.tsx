@@ -61,6 +61,10 @@ interface LeadTableProps {
   sortOrder: string;
   onSort: (field: string) => void;
   limit: number;
+  /** Compact row height for Split view (36px instead of 48px) */
+  compact?: boolean;
+  /** Highlight row whose lead.id matches this value (cross-view sync) */
+  selectedLeadId?: string | null;
 }
 
 function StatusBadge({ status }: { status: string }) {
@@ -124,6 +128,8 @@ export function LeadTable({
   sortOrder,
   onSort,
   limit,
+  compact = false,
+  selectedLeadId,
 }: LeadTableProps) {
   const totalPages = Math.ceil(total / limit);
 
@@ -303,12 +309,20 @@ export function LeadTable({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.03, duration: 0.25 }}
                 onClick={() => onLeadClick(row.original)}
-                className="group hover:bg-sky-50/50 transition-colors duration-150 cursor-pointer"
+                className={cn(
+                  'group transition-colors duration-150 cursor-pointer',
+                  selectedLeadId === row.original.id
+                    ? 'bg-sky-50 dark:bg-sky-900/20'
+                    : 'hover:bg-sky-50/50',
+                )}
               >
                 {row.getVisibleCells().map((cell) => (
                   <td
                     key={cell.id}
-                    className="px-5 py-4 first:pl-6 last:pr-4 text-sm text-muted-foreground whitespace-nowrap"
+                    className={cn(
+                      'px-5 first:pl-6 last:pr-4 text-sm text-muted-foreground whitespace-nowrap',
+                      compact ? 'py-2' : 'py-4',
+                    )}
                   >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </td>

@@ -15,6 +15,7 @@ import {
   Briefcase,
   ClipboardList,
   Kanban,
+  LayoutGrid,
 } from 'lucide-react';
 import { cn, getInitials, getAvatarColor } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -23,8 +24,7 @@ import { toast } from 'sonner';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'Leads', icon: Target, href: '/leads' },
-  { label: 'Pipeline', icon: Kanban, href: '/pipeline' },
+  { label: 'CRM', icon: LayoutGrid, href: '/crm' },
   { label: 'Customers', icon: Users2, href: '/customers' },
   { label: 'Design Specs', icon: ClipboardList, href: '/design-specs' },
   { label: 'Quotations', icon: FileText, href: '/quotations' },
