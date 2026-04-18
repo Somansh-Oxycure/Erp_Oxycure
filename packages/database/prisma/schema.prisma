@@ -1,0 +1,513 @@
+// ============================================
+// PRISMA SCHEMA — Oxycure ERP Phase 1
+// ============================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  admin
+  manager
+  salesperson
+  installer
+  service_engineer
+  design_engineer
+  finance
+}
+
+enum Department {
+  sales
+  operations
+  service
+  admin
+  finance
+  design
+}
+
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  quoted
+  won
+  lost
+}
+
+enum LeadSource {
+  website
+  referral
+  walk_in
+  cold_call
+  social_media
+  exhibition
+  partner
+  other
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ProductType {
+  air_purifier
+  moscure
+  industrial_solution
+  hvac
+  other
+}
+
+enum NoteType {
+  general
+  follow_up
+  meeting
+  call
+  status_change
+  site_inspection
+  design_review
+}
+
+enum FollowUpStatus {
+  pending
+  completed
+  missed
+  rescheduled
+}
+
+enum CustomerType {
+  individual
+  business
+  hospital
+  clinic
+  government
+  other
+}
+
+enum DesignSpecStatus {
+  requested
+  in_progress
+  completed
+  approved
+  revision_needed
+}
+
+enum OpportunityStage {
+  prospect
+  discovery
+  proposal
+  negotiation
+  closed_won
+  closed_lost
+}
+
+enum QuotationStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
+}
+
+enum OrderStatus {
+  created
+  confirmed
+  in_progress
+  completed
+  cancelled
+  on_hold
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id                    String    @id @default(uuid())
+  employeeId            String    @unique @map("employee_id")
+  firstName             String    @map("first_name")
+  lastName              String    @map("last_name")
+  email                 String    @unique
+  phone                 String
+  passwordHash          String    @map("password_hash")
+  role                  UserRole
+  department            Department
+  isActive              Boolean   @default(true) @map("is_active")
+  lastLoginAt           DateTime? @map("last_login_at")
+  failedLoginAttempts   Int       @default(0) @map("failed_login_attempts")
+  lockedUntil           DateTime? @map("locked_until")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  assignedLeads         Lead[]                @relation("AssignedLeads")
+  createdLeads          Lead[]                @relation("CreatedLeads")
+  convertedLeads        Lead[]                @relation("ConvertedLeads")
+  leadNotes             LeadNote[]
+  createdFollowUps      LeadFollowUp[]        @relation("CreatedFollowUps")
+  assignedFollowUps     LeadFollowUp[]        @relation("AssignedFollowUps")
+  designedSpecs         DesignSpecification[] @relation("DesignedSpecs")
+  reviewedSpecs         DesignSpecification[] @relation("ReviewedSpecs")
+  siteInspections       DesignSpecification[] @relation("SiteInspections")
+  createdSpecs          DesignSpecification[] @relation("CreatedSpecs")
+  assignedOpportunities Opportunity[]         @relation("AssignedOpportunities")
+  createdOpportunities  Opportunity[]         @relation("CreatedOpportunities")
+  createdQuotations     Quotation[]
+  createdOrders         Order[]
+  createdCustomers      Customer[]
+  refreshTokens         RefreshToken[]
+  auditLogs             AuditLog[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String   @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Customer {
+  id             String       @id @default(uuid())
+  customerNumber String       @unique @map("customer_number")
+  firstName      String       @map("first_name")
+  lastName       String?      @map("last_name")
+  email          String?
+  phone          String       @unique
+  alternatePhone String?      @map("alternate_phone")
+  companyName    String?      @map("company_name")
+  designation    String?
+  gstNumber      String?      @map("gst_number")
+  addressLine1   String?      @map("address_line1")
+  addressLine2   String?      @map("address_line2")
+  city           String
+  state          String
+  pincode        String?
+  customerType   CustomerType @default(individual) @map("customer_type")
+  leadId         String?      @unique @map("lead_id")
+  createdById    String       @map("created_by")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  // Relations
+  lead           Lead?                 @relation(fields: [leadId], references: [id])
+  createdBy      User                  @relation(fields: [createdById], references: [id])
+  orders         Order[]
+  opportunities  Opportunity[]
+  quotations     Quotation[]
+  designSpecs    DesignSpecification[]
+
+  @@index([phone])
+  @@map("customers")
+}
+
+model Lead {
+  id                   String      @id @default(uuid())
+  leadNumber           String      @unique @map("lead_number")
+  firstName            String      @map("first_name")
+  lastName             String?     @map("last_name")
+  email                String?
+  phone                String
+  alternatePhone       String?     @map("alternate_phone")
+  companyName          String?     @map("company_name")
+  designation          String?
+  addressLine1         String?     @map("address_line1")
+  addressLine2         String?     @map("address_line2")
+  city                 String?
+  state                String?
+  pincode              String?
+  source               LeadSource  @default(other)
+  sourceDetail         String?     @map("source_detail")
+  status               LeadStatus  @default(new)
+  lostReason           String?     @map("lost_reason")
+  priority             Priority    @default(medium)
+  assignedToId         String?     @map("assigned_to")
+  estimatedValue       Decimal?    @map("estimated_value") @db.Decimal(12, 2)
+  productInterest      String?     @map("product_interest")
+  productType          ProductType? @map("product_type")
+  requirementNotes     String?     @map("requirement_notes") @db.Text
+  siteInspectionNeeded Boolean     @default(false) @map("site_inspection_needed")
+  nextFollowUpDate     DateTime?   @map("next_follow_up_date") @db.Date
+  convertedAt          DateTime?   @map("converted_at")
+  convertedById        String?     @map("converted_by")
+  createdById          String      @map("created_by")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  assignedTo    User?                 @relation("AssignedLeads", fields: [assignedToId], references: [id])
+  convertedBy   User?                 @relation("ConvertedLeads", fields: [convertedById], references: [id])
+  createdBy     User                  @relation("CreatedLeads", fields: [createdById], references: [id])
+  customer      Customer?
+  notes         LeadNote[]
+  followUps     LeadFollowUp[]
+  designSpecs   DesignSpecification[]
+  opportunities Opportunity[]
+  orders        Order[]
+  quotations    Quotation[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([priority])
+  @@index([phone])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+model LeadNote {
+  id          String   @id @default(uuid())
+  leadId      String   @map("lead_id")
+  note        String   @db.Text
+  noteType    NoteType @default(general) @map("note_type")
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy User @relation(fields: [createdById], references: [id])
+
+  @@index([leadId])
+  @@map("lead_notes")
+}
+
+model LeadFollowUp {
+  id            String         @id @default(uuid())
+  leadId        String         @map("lead_id")
+  scheduledDate DateTime       @map("scheduled_date") @db.Date
+  scheduledTime String?        @map("scheduled_time")
+  description   String?        @db.Text
+  status        FollowUpStatus @default(pending)
+  outcome       String?        @db.Text
+  completedAt   DateTime?      @map("completed_at")
+  assignedToId  String         @map("assigned_to")
+  createdById   String         @map("created_by")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User @relation("AssignedFollowUps", fields: [assignedToId], references: [id])
+  createdBy  User @relation("CreatedFollowUps", fields: [createdById], references: [id])
+
+  @@index([leadId])
+  @@index([scheduledDate])
+  @@index([status])
+  @@map("lead_follow_ups")
+}
+
+model DesignSpecification {
+  id                  String           @id @default(uuid())
+  specNumber          String           @unique @map("spec_number")
+  leadId              String           @map("lead_id")
+  customerId          String?          @map("customer_id")
+  status              DesignSpecStatus @default(requested)
+
+  // Requirement Input
+  productType         ProductType      @map("product_type")
+  requirementSummary  String?          @map("requirement_summary") @db.Text
+  siteAreaSqft        Decimal?         @map("site_area_sqft") @db.Decimal(10, 2)
+  siteType            String?          @map("site_type")
+  siteEnvironment     String?          @map("site_environment") @db.Text
+  powerAvailability   String?          @map("power_availability")
+  specialRequirements String?          @map("special_requirements") @db.Text
+
+  // Site Inspection
+  siteInspectionDone  Boolean          @default(false) @map("site_inspection_done")
+  siteInspectionDate  DateTime?        @map("site_inspection_date") @db.Date
+  siteInspectionById  String?          @map("site_inspection_by")
+  siteInspectionNotes String?          @map("site_inspection_notes") @db.Text
+  sitePhotosUrl       String?          @map("site_photos_url")
+
+  // Design Output
+  recommendedProducts Json?            @map("recommended_products")
+  configurationNotes  String?          @map("configuration_notes") @db.Text
+  technicalSpecs      String?          @map("technical_specs") @db.Text
+  bomItems            Json?            @map("bom_items")
+  estimatedCost       Decimal?         @map("estimated_cost") @db.Decimal(12, 2)
+
+  // Approval
+  designedById        String?          @map("designed_by")
+  reviewedById        String?          @map("reviewed_by")
+  approvedAt          DateTime?        @map("approved_at")
+  revisionNotes       String?          @map("revision_notes") @db.Text
+  quotationId         String?          @map("quotation_id")
+
+  createdById         String           @map("created_by")
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  lead             Lead       @relation(fields: [leadId], references: [id])
+  customer         Customer?  @relation(fields: [customerId], references: [id])
+  designedBy       User?      @relation("DesignedSpecs", fields: [designedById], references: [id])
+  reviewedBy       User?      @relation("ReviewedSpecs", fields: [reviewedById], references: [id])
+  siteInspectionBy User?      @relation("SiteInspections", fields: [siteInspectionById], references: [id])
+  createdBy        User       @relation("CreatedSpecs", fields: [createdById], references: [id])
+  quotation        Quotation? @relation(fields: [quotationId], references: [id])
+
+  @@index([leadId])
+  @@index([status])
+  @@map("design_specifications")
+}
+
+model Opportunity {
+  id                String           @id @default(uuid())
+  opportunityNumber String           @unique @map("opportunity_number")
+  leadId            String           @map("lead_id")
+  customerId        String?          @map("customer_id")
+  title             String
+  stage             OpportunityStage @default(prospect)
+  dealValue         Decimal?         @map("deal_value") @db.Decimal(12, 2)
+  probability       Int              @default(0)
+  expectedCloseDate DateTime?        @map("expected_close_date") @db.Date
+  actualCloseDate   DateTime?        @map("actual_close_date") @db.Date
+  lostReason        String?          @map("lost_reason")
+  assignedToId      String           @map("assigned_to")
+  notes             String?          @db.Text
+  createdById       String           @map("created_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  // Relations
+  lead       Lead      @relation(fields: [leadId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  assignedTo User      @relation("AssignedOpportunities", fields: [assignedToId], references: [id])
+  createdBy  User      @relation("CreatedOpportunities", fields: [createdById], references: [id])
+  quotations Quotation[]
+  orders     Order[]
+
+  @@index([leadId])
+  @@index([stage])
+  @@map("opportunities")
+}
+
+model Quotation {
+  id                 String          @id @default(uuid())
+  quotationNumber    String          @unique @map("quotation_number")
+  opportunityId      String?         @map("opportunity_id")
+  customerId         String          @map("customer_id")
+  leadId             String?         @map("lead_id")
+  validUntil         DateTime?       @map("valid_until") @db.Date
+  subtotal           Decimal         @default(0) @db.Decimal(12, 2)
+  taxAmount          Decimal         @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  discountAmount     Decimal         @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  totalAmount        Decimal         @default(0) @map("total_amount") @db.Decimal(12, 2)
+  status             QuotationStatus @default(draft)
+  termsAndConditions String?         @map("terms_and_conditions") @db.Text
+  notes              String?         @db.Text
+  createdById        String          @map("created_by")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  opportunity  Opportunity?          @relation(fields: [opportunityId], references: [id])
+  customer     Customer              @relation(fields: [customerId], references: [id])
+  lead         Lead?                 @relation(fields: [leadId], references: [id])
+  createdBy    User                  @relation(fields: [createdById], references: [id])
+  items        QuotationItem[]
+  orders       Order[]
+  designSpecs  DesignSpecification[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("quotations")
+}
+
+model QuotationItem {
+  id              String    @id @default(uuid())
+  quotationId     String    @map("quotation_id")
+  productName     String    @map("product_name")
+  description     String?   @db.Text
+  quantity        Int       @default(1)
+  unitPrice       Decimal   @map("unit_price") @db.Decimal(12, 2)
+  discountPercent Decimal   @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  taxPercent      Decimal   @default(18) @map("tax_percent") @db.Decimal(5, 2)
+  totalPrice      Decimal   @map("total_price") @db.Decimal(12, 2)
+  sortOrder       Int       @default(0) @map("sort_order")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId])
+  @@map("quotation_items")
+}
+
+model Order {
+  id                   String      @id @default(uuid())
+  orderNumber          String      @unique @map("order_number")
+  customerId           String      @map("customer_id")
+  leadId               String?     @map("lead_id")
+  opportunityId        String?     @map("opportunity_id")
+  quotationId          String?     @map("quotation_id")
+  status               OrderStatus @default(created)
+  totalAmount          Decimal     @map("total_amount") @db.Decimal(12, 2)
+  notes                String?     @db.Text
+  expectedDeliveryDate DateTime?   @map("expected_delivery_date") @db.Date
+  createdById          String      @map("created_by")
+  createdAt            DateTime    @default(now()) @map("created_at")
+  updatedAt            DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  lead        Lead?        @relation(fields: [leadId], references: [id])
+  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  quotation   Quotation?   @relation(fields: [quotationId], references: [id])
+  createdBy   User         @relation(fields: [createdById], references: [id])
+  items       OrderItem[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String   @map("order_id")
+  productName String   @map("product_name")
+  description String?  @db.Text
+  quantity    Int      @default(1)
+  unitPrice   Decimal  @map("unit_price") @db.Decimal(12, 2)
+  totalPrice  Decimal  @map("total_price") @db.Decimal(12, 2)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  action     String   // CREATE, UPDATE, DELETE, STATUS_CHANGE, LOGIN, LOGOUT, etc.
+  entityType String   @map("entity_type") // leads, orders, users, etc.
+  entityId   String   @map("entity_id")
+  changes    Json?    // { before: {...}, after: {...} }
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

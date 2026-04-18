@@ -1,0 +1,44 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: oxycure_postgres
+    environment:
+      POSTGRES_USER: oxycure
+      POSTGRES_PASSWORD: oxycure_secret_2026
+      POSTGRES_DB: oxycure_erp
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oxycure -d oxycure_erp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - oxycure_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: oxycure_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass oxycure_redis_2026
+    networks:
+      - oxycure_net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  oxycure_net:
+    driver: bridge

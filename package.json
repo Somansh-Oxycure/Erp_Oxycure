@@ -1,0 +1,29 @@
+{
+  "name": "oxycure-erp",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "db:migrate": "node_modules/.bin/prisma migrate dev --schema=packages/database/prisma/schema.prisma",
+    "db:generate": "node_modules/.bin/prisma generate --schema=packages/database/prisma/schema.prisma",
+    "db:seed": "node_modules/.bin/prisma db seed --schema=packages/database/prisma/schema.prisma",
+    "db:studio": "node_modules/.bin/prisma studio --schema=packages/database/prisma/schema.prisma",
+    "db:push": "node_modules/.bin/prisma db push --schema=packages/database/prisma/schema.prisma",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:reset": "docker-compose down -v && docker-compose up -d"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  }
+}
