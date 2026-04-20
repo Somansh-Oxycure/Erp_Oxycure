@@ -2,8 +2,6 @@
 
 import { create } from 'zustand';
 
-export type CRMView = 'kanban' | 'list' | 'split';
-
 export interface CRMFilters {
   search: string;
   dateRange: { from: string | null; to: string | null };
@@ -11,11 +9,9 @@ export interface CRMFilters {
 }
 
 interface CRMState {
-  activeView: CRMView;
   selectedId: string | null;
   filters: CRMFilters;
 
-  setActiveView: (view: CRMView) => void;
   setSelectedId: (id: string | null) => void;
   setSearch: (s: string) => void;
   setDateRange: (range: { from: string | null; to: string | null }) => void;
@@ -30,11 +26,9 @@ const DEFAULT_FILTERS: CRMFilters = {
 };
 
 export const useCRMStore = create<CRMState>((set) => ({
-  activeView: 'kanban',
   selectedId: null,
   filters: DEFAULT_FILTERS,
 
-  setActiveView: (view) => set({ activeView: view }),
   setSelectedId: (id) => set({ selectedId: id }),
   setSearch: (s) => set((state) => ({ filters: { ...state.filters, search: s } })),
   setDateRange: (range) => set((state) => ({ filters: { ...state.filters, dateRange: range } })),

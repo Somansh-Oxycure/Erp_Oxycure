@@ -1,230 +1,190 @@
 'use client';
 
-import { useEffect, useState, useDeferredValue, useCallback } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import {
-  LayoutGrid,
-  List,
-  Columns2,
-  Plus,
-  Search,
-  X,
-  DollarSign,
-} from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
-import { opportunitiesApi } from '@/lib/api';
-import { useCRMStore, type CRMView } from '@/stores/crm-store';
+import { Search, X, ChevronDown, Calendar } from 'lucide-react';
+import { useCRMStore } from '@/stores/crm-store';
 import { KanbanBoard } from '@/components/crm/kanban-board';
-import { LeadsListView } from '@/components/crm/leads-list-view';
-import { SplitView } from '@/components/crm/split-view';
 import { LeadDetailPanel } from '@/components/leads/lead-detail-panel';
 import { CreateLeadDialog } from '@/components/leads/create-lead-dialog';
-import type { Lead } from '@/components/leads/lead-table';
 
-const VIEWS: { key: CRMView; label: string; icon: React.ElementType }[] = [
-  { key: 'kanban', label: 'Kanban',     icon: LayoutGrid },
-  { key: 'list',   label: 'Leads List', icon: List       },
-  { key: 'split',  label: 'Split',      icon: Columns2   },
+// ─── Date range presets ────────────────────────────────────────────────────────
+type DatePreset = 'this_month' | 'last_month' | 'this_quarter' | 'last_3_months' | 'all_time';
+
+const DATE_PRESETS: { label: string; value: DatePreset }[] = [
+  { label: 'This Month',    value: 'this_month'    },
+  { label: 'Last Month',    value: 'last_month'    },
+  { label: 'This Quarter',  value: 'this_quarter'  },
+  { label: 'Last 3 Months', value: 'last_3_months' },
+  { label: 'All Time',      value: 'all_time'      },
 ];
 
+function getDateRange(preset: DatePreset): { from: string | null; to: string | null } {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const toISO = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+  if (preset === 'all_time') return { from: null, to: null };
+
+  const today = toISO(now);
+
+  if (preset === 'this_month') {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: toISO(from), to: today };
+  }
+  if (preset === 'last_month') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const to   = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { from: toISO(from), to: toISO(to) };
+  }
+  if (preset === 'this_quarter') {
+    const q     = Math.floor(now.getMonth() / 3);
+    const from  = new Date(now.getFullYear(), q * 3, 1);
+    return { from: toISO(from), to: today };
+  }
+  if (preset === 'last_3_months') {
+    const from = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+    return { from: toISO(from), to: today };
+  }
+  return { from: null, to: null };
+}
+
 export default function CRMPage() {
-  const router = useRouter();
+  const router      = useRouter();
   const searchParams = useSearchParams();
 
   const {
-    activeView,
     selectedId,
     filters,
-    setActiveView,
     setSelectedId,
     setSearch,
-    setProductType,
+    setDateRange,
   } = useCRMStore();
 
-  const [showCreate, setShowCreate] = useState(false);
+  const [showCreate,    setShowCreate]    = useState(false);
+  const [datePreset,    setDatePreset]    = useState<DatePreset>('this_month');
+  const [showDateDrop,  setShowDateDrop]  = useState(false);
 
-  const deferredSearch = useDeferredValue(filters.search);
-
-  // ── Sync URL → store on mount ───────────────────────────────────────────────
+  // ── Sync URL → store on mount ─────────────────────────────────────────────
   useEffect(() => {
-    const view = searchParams.get('view') as CRMView | null;
     const id = searchParams.get('id') ?? searchParams.get('deal');
-    if (view && ['kanban', 'list', 'split'].includes(view)) setActiveView(view);
     if (id) setSelectedId(id);
+    // Initialise date range to "This Month"
+    setDateRange(getDateRange('this_month'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── URL push helper ─────────────────────────────────────────────────────────
-  const pushURL = useCallback(
-    (view: CRMView, id: string | null) => {
+  // ── Push ?id= to URL ──────────────────────────────────────────────────────
+  const pushId = useCallback(
+    (id: string | null) => {
       const p = new URLSearchParams();
-      p.set('view', view);
       if (id) p.set('id', id);
-      router.replace(`/crm?${p.toString()}`, { scroll: false });
+      router.replace(id ? `/crm?${p.toString()}` : '/crm', { scroll: false });
     },
     [router],
   );
 
-  const handleViewChange = (v: CRMView) => {
-    setActiveView(v);
-    pushURL(v, selectedId);
-  };
-
   const handleSelectLead = useCallback(
     (id: string | null) => {
       setSelectedId(id);
-      pushURL(activeView, id);
+      pushId(id);
     },
-    [activeView, setSelectedId, pushURL],
+    [setSelectedId, pushId],
   );
 
-  const handleLeadClick = useCallback(
-    (lead: Lead) => handleSelectLead(lead.id),
-    [handleSelectLead],
-  );
+  // ── Date preset change ────────────────────────────────────────────────────
+  const handlePresetChange = (preset: DatePreset) => {
+    setDatePreset(preset);
+    setDateRange(getDateRange(preset));
+    setShowDateDrop(false);
+  };
 
-  const handleKanbanSelect = useCallback(
-    (leadId: string | null) => handleSelectLead(leadId),
-    [handleSelectLead],
-  );
-
-  // ── Pipeline value badge ────────────────────────────────────────────────────
-  const { data: pipelineData } = useQuery({
-    queryKey: ['pipeline'],
-    queryFn: () => opportunitiesApi.pipeline().then((r) => r.data),
-    staleTime: 30000,
-  });
-  const pipeline = pipelineData?.data ?? pipelineData ?? {};
-  const totalPipelineValue = ['prospect', 'discovery', 'proposal', 'negotiation'].reduce(
-    (sum, k) => sum + ((pipeline as any)[k]?.totalValue ?? 0),
-    0,
-  );
-
-  const isKanban = activeView === 'kanban';
-  const isList   = activeView === 'list';
-  const isSplit  = activeView === 'split';
+  const selectedPresetLabel = DATE_PRESETS.find((p) => p.value === datePreset)?.label ?? 'This Month';
 
   return (
-    <div className={cn('flex flex-col min-h-full', isSplit ? 'h-full overflow-hidden' : '')}>
-      {/* ── Top Bar ── */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-border bg-background/80 backdrop-blur-sm shrink-0 flex-wrap">
-        {/* Left: title + pipeline badge */}
-        <div className="flex items-center gap-3 min-w-0">
-          <div>
-            <h1 className="text-xl font-bold text-foreground leading-tight">Pipeline &amp; Leads</h1>
-          </div>
-          {totalPipelineValue > 0 && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-sky-500/10 ring-1 ring-sky-500/25 shrink-0">
-              <DollarSign className="w-3 h-3 text-sky-400" />
-              <span className="text-xs font-bold text-sky-400">{formatCurrency(totalPipelineValue)}</span>
-            </div>
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+      {/* ── Top Bar ─────────────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border bg-background shrink-0">
+        {/* Center: search */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search by Company Name, Service, Tag etc..."
+            value={filters.search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-9 py-2 bg-card border border-border rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all"
+          />
+          {filters.search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           )}
         </div>
 
-        {/* Center: global search */}
-        <div className="flex-1 max-w-sm min-w-[180px]">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search leads &amp; deals..."
-              value={filters.search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-card border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500 transition-all"
-            />
-            {filters.search && (
-              <button
-                onClick={() => setSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
+        {/* Date range dropdown */}
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setShowDateDrop((v) => !v)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-card border border-border rounded-lg text-sm text-foreground hover:bg-accent transition-colors"
+          >
+            <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+            {selectedPresetLabel}
+            <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+          </button>
+          {showDateDrop && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowDateDrop(false)} />
+              <div className="absolute right-0 top-full mt-1.5 z-20 w-44 bg-popover border border-border rounded-xl shadow-xl overflow-hidden">
+                {DATE_PRESETS.map((p) => (
+                  <button
+                    key={p.value}
+                    onClick={() => handlePresetChange(p.value)}
+                    className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                      datePreset === p.value
+                        ? 'bg-sky-500/10 text-sky-500 font-medium'
+                        : 'text-foreground hover:bg-accent'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Right: Add Lead button */}
+        {/* Find Opportunity CTA */}
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold rounded-xl transition-all shadow-sm shadow-sky-200 active:scale-[0.98] shrink-0"
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition-all shadow-sm active:scale-[0.98] shrink-0"
         >
-          <Plus className="w-4 h-4" />
-          Add Lead
+          Find Opportunity
         </button>
       </div>
 
-      {/* ── View Toggle (tab strip) ── */}
-      <div className="flex items-center gap-1 px-6 py-2 border-b border-border bg-background/60 shrink-0">
-        {VIEWS.map((v) => {
-          const Icon = v.icon;
-          const active = activeView === v.key;
-          return (
-            <button
-              key={v.key}
-              onClick={() => handleViewChange(v.key)}
-              className={cn(
-                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all duration-200',
-                active
-                  ? 'bg-foreground text-background shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-              )}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {v.label}
-            </button>
-          );
-        })}
+      {/* ── Kanban Board (full height) ───────────────────────────────────────── */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+        <KanbanBoard
+          selectedLeadId={selectedId}
+          onSelectLead={handleSelectLead}
+          searchQuery={filters.search}
+          dateRange={filters.dateRange}
+        />
       </div>
 
-      {/* ── Main content area ── */}
-      <div className={cn(
-        'flex-1 min-h-0',
-        isKanban || isList ? 'p-6' : 'overflow-hidden',
-        isSplit ? 'flex flex-col' : '',
-      )}>
-        {/* Kanban view */}
-        {isKanban && (
-          <div className="h-full">
-            <KanbanBoard
-              selectedLeadId={selectedId}
-              onSelectOpp={(leadId) => handleKanbanSelect(leadId)}
-            />
-          </div>
-        )}
-
-        {/* Leads List view */}
-        {isList && (
-          <LeadsListView
-            selectedLeadId={selectedId}
-            onLeadSelect={handleLeadClick}
-            externalSearch={deferredSearch}
-            externalProductType={filters.productType}
-          />
-        )}
-
-        {/* Split view */}
-        {isSplit && (
-          <div className="flex-1 min-h-0 px-6 pb-6 pt-2">
-            <SplitView
-              selectedLeadId={selectedId}
-              onLeadSelect={handleLeadClick}
-              onKanbanSelect={(leadId) => handleKanbanSelect(leadId)}
-              externalSearch={deferredSearch}
-              externalProductType={filters.productType}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* ── Shared Detail Panel ── */}
+      {/* ── Shared Detail Panel ──────────────────────────────────────────────── */}
       <LeadDetailPanel
         leadId={selectedId}
         onClose={() => handleSelectLead(null)}
       />
 
-      {/* ── Create Lead Dialog ── */}
+      {/* ── Create Lead Dialog ───────────────────────────────────────────────── */}
       <CreateLeadDialog open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
   );
 }
+

@@ -7,7 +7,7 @@ import type { Lead } from '@/components/leads/lead-table';
 interface SplitViewProps {
   selectedLeadId: string | null;
   onLeadSelect: (lead: Lead) => void;
-  onKanbanSelect: (leadId: string | null, oppId: string | null) => void;
+  onKanbanSelect: (leadId: string | null) => void;
   externalSearch?: string;
   externalProductType?: string;
 }
@@ -26,8 +26,7 @@ export function SplitView({
         <div className="h-full p-3 overflow-hidden">
           <KanbanBoard
             selectedLeadId={selectedLeadId}
-            onSelectOpp={onKanbanSelect}
-            compact
+            onSelectLead={onKanbanSelect}
           />
         </div>
       </div>
