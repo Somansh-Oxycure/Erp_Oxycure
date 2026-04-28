@@ -34,16 +34,18 @@ enum Department {
   design
 }
 
-enum LeadStatus {
+enum TicketStatus {
   new
   contacted
-  qualified
+  site_inspection
+  design_review
   quoted
   won
   lost
 }
 
-enum LeadSource {
+enum TicketSource {
+  direct_enquiry
   website
   referral
   walk_in
@@ -103,16 +105,15 @@ enum DesignSpecStatus {
   revision_needed
 }
 
-enum OpportunityStage {
-  prospect
-  discovery
-  proposal
-  negotiation
-  closed_won
-  closed_lost
+enum QuotationStatus {
+  draft
+  sent
+  accepted
+  rejected
+  expired
 }
 
-enum QuotationStatus {
+enum ProposalStatus {
   draft
   sent
   accepted
@@ -150,22 +151,23 @@ model User {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
-  // Relations
-  assignedLeads         Lead[]                @relation("AssignedLeads")
-  createdLeads          Lead[]                @relation("CreatedLeads")
-  convertedLeads        Lead[]                @relation("ConvertedLeads")
-  leadNotes             LeadNote[]
-  createdFollowUps      LeadFollowUp[]        @relation("CreatedFollowUps")
-  assignedFollowUps     LeadFollowUp[]        @relation("AssignedFollowUps")
+  // Ticket relations
+  assignedTickets       Ticket[]              @relation("TicketAssignedTo")
+  createdTickets        Ticket[]              @relation("TicketCreatedBy")
+  convertedTickets      Ticket[]              @relation("TicketConvertedBy")
+  ticketNotes           TicketNote[]
+  ticketFollowUps       TicketFollowUp[]      @relation("TicketFollowUpCreatedBy")
+  ticketStatusHistories TicketStatusHistory[] @relation("StatusHistoryChangedBy")
+
+  // Other relations
   designedSpecs         DesignSpecification[] @relation("DesignedSpecs")
   reviewedSpecs         DesignSpecification[] @relation("ReviewedSpecs")
   siteInspections       DesignSpecification[] @relation("SiteInspections")
   createdSpecs          DesignSpecification[] @relation("CreatedSpecs")
-  assignedOpportunities Opportunity[]         @relation("AssignedOpportunities")
-  createdOpportunities  Opportunity[]         @relation("CreatedOpportunities")
   createdQuotations     Quotation[]
   createdOrders         Order[]
   createdCustomers      Customer[]
+  createdProposals      Proposal[]            @relation("CreatedProposals")
   refreshTokens         RefreshToken[]
   auditLogs             AuditLog[]
 
@@ -202,16 +204,15 @@ model Customer {
   state          String
   pincode        String?
   customerType   CustomerType @default(individual) @map("customer_type")
-  leadId         String?      @unique @map("lead_id")
+  ticketId       String?      @unique @map("ticket_id")
   createdById    String       @map("created_by")
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
   // Relations
-  lead           Lead?                 @relation(fields: [leadId], references: [id])
+  ticket         Ticket?               @relation(fields: [ticketId], references: [id])
   createdBy      User                  @relation(fields: [createdById], references: [id])
   orders         Order[]
-  opportunities  Opportunity[]
   quotations     Quotation[]
   designSpecs    DesignSpecification[]
 
@@ -219,102 +220,116 @@ model Customer {
   @@map("customers")
 }
 
-model Lead {
-  id                   String      @id @default(uuid())
-  leadNumber           String      @unique @map("lead_number")
-  firstName            String      @map("first_name")
-  lastName             String?     @map("last_name")
-  email                String?
-  phone                String
-  alternatePhone       String?     @map("alternate_phone")
-  companyName          String?     @map("company_name")
-  designation          String?
-  addressLine1         String?     @map("address_line1")
-  addressLine2         String?     @map("address_line2")
-  city                 String?
-  state                String?
-  pincode              String?
-  source               LeadSource  @default(other)
-  sourceDetail         String?     @map("source_detail")
-  status               LeadStatus  @default(new)
-  lostReason           String?     @map("lost_reason")
-  priority             Priority    @default(medium)
-  assignedToId         String?     @map("assigned_to")
-  estimatedValue       Decimal?    @map("estimated_value") @db.Decimal(12, 2)
-  productInterest      String?     @map("product_interest")
-  productType          ProductType? @map("product_type")
-  requirementNotes     String?     @map("requirement_notes") @db.Text
-  siteInspectionNeeded Boolean     @default(false) @map("site_inspection_needed")
-  nextFollowUpDate     DateTime?   @map("next_follow_up_date") @db.Date
-  convertedAt          DateTime?   @map("converted_at")
-  convertedById        String?     @map("converted_by")
-  createdById          String      @map("created_by")
-  createdAt            DateTime    @default(now()) @map("created_at")
-  updatedAt            DateTime    @updatedAt @map("updated_at")
+model Ticket {
+  id             String        @id @default(uuid())
+  ticketNumber   String        @unique @map("ticket_number")
 
-  // Relations
-  assignedTo    User?                 @relation("AssignedLeads", fields: [assignedToId], references: [id])
-  convertedBy   User?                 @relation("ConvertedLeads", fields: [convertedById], references: [id])
-  createdBy     User                  @relation("CreatedLeads", fields: [createdById], references: [id])
-  customer      Customer?
-  notes         LeadNote[]
-  followUps     LeadFollowUp[]
-  designSpecs   DesignSpecification[]
-  opportunities Opportunity[]
-  orders        Order[]
-  quotations    Quotation[]
+  // ── Contact / Client ──────────────────────────────
+  clientName     String        @map("client_name")
+  name           String        // contact person at client side
+  clientLocation String?       @map("client_location")
+  region         String?
+  phone          String
+  alternatePhone String?       @map("alternate_phone")
+  email          String?
+
+  // ── Project ───────────────────────────────────────
+  projectName     String?      @map("project_name")
+  projectLocation String?      @map("project_location")
+
+  // ── Consultant ────────────────────────────────────
+  consultantName     String?   @map("consultant_name")
+  consultantLocation String?   @map("consultant_location")
+
+  // ── Architect ─────────────────────────────────────
+  architectName     String?    @map("architect_name")
+  architectLocation String?    @map("architect_location")
+
+  // ── Deal Info ─────────────────────────────────────
+  approveMake      String?     @map("approve_make")
+  productType      ProductType? @map("product_type")
+  estimatedValue   Decimal?    @map("estimated_value") @db.Decimal(12, 2)
+  requirementNotes String?     @map("requirement_notes") @db.Text
+
+  // ── Pipeline ──────────────────────────────────────
+  status           TicketStatus @default(new)
+  priority         Priority     @default(medium)
+  source           TicketSource @default(other)
+  sourceDetail     String?      @map("source_detail")
+  lostReason       String?      @map("lost_reason")
+  nextFollowUpDate DateTime?    @map("next_follow_up_date") @db.Date
+  siteInspectionNeeded Boolean  @default(false) @map("site_inspection_needed")
+
+  // ── Conversion ────────────────────────────────────
+  convertedAt    DateTime?     @map("converted_at")
+  convertedById  String?       @map("converted_by")
+
+  // ── Relations ─────────────────────────────────────
+  assignedToId   String?       @map("assigned_to")
+  createdById    String        @map("created_by")
+
+  assignedTo     User?         @relation("TicketAssignedTo", fields: [assignedToId], references: [id])
+  convertedBy    User?         @relation("TicketConvertedBy", fields: [convertedById], references: [id])
+  createdBy      User          @relation("TicketCreatedBy", fields: [createdById], references: [id])
+  customer       Customer?
+
+  notes          TicketNote[]
+  followUps      TicketFollowUp[]
+  statusHistory  TicketStatusHistory[]
+  quotations     Quotation[]
+  orders         Order[]
+  designSpecs    DesignSpecification[]
+  proposals      Proposal[]
+
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([assignedToId])
   @@index([priority])
   @@index([phone])
   @@index([createdAt])
-  @@map("leads")
+  @@map("tickets")
 }
 
-model LeadNote {
+model TicketNote {
   id          String   @id @default(uuid())
-  leadId      String   @map("lead_id")
-  note        String   @db.Text
-  noteType    NoteType @default(general) @map("note_type")
+  ticketId    String   @map("ticket_id")
+  content     String   @db.Text
+  type        NoteType @default(general)
   createdById String   @map("created_by")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  lead      Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  createdBy User @relation(fields: [createdById], references: [id])
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdBy User   @relation(fields: [createdById], references: [id])
 
-  @@index([leadId])
-  @@map("lead_notes")
+  @@index([ticketId])
+  @@map("ticket_notes")
 }
 
-model LeadFollowUp {
-  id            String         @id @default(uuid())
-  leadId        String         @map("lead_id")
-  scheduledDate DateTime       @map("scheduled_date") @db.Date
-  scheduledTime String?        @map("scheduled_time")
-  description   String?        @db.Text
-  status        FollowUpStatus @default(pending)
-  outcome       String?        @db.Text
-  completedAt   DateTime?      @map("completed_at")
-  assignedToId  String         @map("assigned_to")
-  createdById   String         @map("created_by")
-  createdAt     DateTime       @default(now()) @map("created_at")
-  updatedAt     DateTime       @updatedAt @map("updated_at")
+model TicketFollowUp {
+  id          String         @id @default(uuid())
+  ticketId    String         @map("ticket_id")
+  scheduledAt DateTime       @map("scheduled_at")
+  status      FollowUpStatus @default(pending)
+  outcome     String?        @db.Text
+  createdById String         @map("created_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
 
-  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  assignedTo User @relation("AssignedFollowUps", fields: [assignedToId], references: [id])
-  createdBy  User @relation("CreatedFollowUps", fields: [createdById], references: [id])
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("TicketFollowUpCreatedBy", fields: [createdById], references: [id])
 
-  @@index([leadId])
-  @@index([scheduledDate])
+  @@index([ticketId])
+  @@index([scheduledAt])
   @@index([status])
-  @@map("lead_follow_ups")
+  @@map("ticket_follow_ups")
 }
 
 model DesignSpecification {
   id                  String           @id @default(uuid())
   specNumber          String           @unique @map("spec_number")
-  leadId              String           @map("lead_id")
+  ticketId            String           @map("ticket_id")
   customerId          String?          @map("customer_id")
   status              DesignSpecStatus @default(requested)
 
@@ -353,7 +368,7 @@ model DesignSpecification {
   updatedAt           DateTime         @updatedAt @map("updated_at")
 
   // Relations
-  lead             Lead       @relation(fields: [leadId], references: [id])
+  ticket           Ticket     @relation(fields: [ticketId], references: [id])
   customer         Customer?  @relation(fields: [customerId], references: [id])
   designedBy       User?      @relation("DesignedSpecs", fields: [designedById], references: [id])
   reviewedBy       User?      @relation("ReviewedSpecs", fields: [reviewedById], references: [id])
@@ -361,48 +376,16 @@ model DesignSpecification {
   createdBy        User       @relation("CreatedSpecs", fields: [createdById], references: [id])
   quotation        Quotation? @relation(fields: [quotationId], references: [id])
 
-  @@index([leadId])
+  @@index([ticketId])
   @@index([status])
   @@map("design_specifications")
-}
-
-model Opportunity {
-  id                String           @id @default(uuid())
-  opportunityNumber String           @unique @map("opportunity_number")
-  leadId            String           @map("lead_id")
-  customerId        String?          @map("customer_id")
-  title             String
-  stage             OpportunityStage @default(prospect)
-  dealValue         Decimal?         @map("deal_value") @db.Decimal(12, 2)
-  probability       Int              @default(0)
-  expectedCloseDate DateTime?        @map("expected_close_date") @db.Date
-  actualCloseDate   DateTime?        @map("actual_close_date") @db.Date
-  lostReason        String?          @map("lost_reason")
-  assignedToId      String           @map("assigned_to")
-  notes             String?          @db.Text
-  createdById       String           @map("created_by")
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-
-  // Relations
-  lead       Lead      @relation(fields: [leadId], references: [id])
-  customer   Customer? @relation(fields: [customerId], references: [id])
-  assignedTo User      @relation("AssignedOpportunities", fields: [assignedToId], references: [id])
-  createdBy  User      @relation("CreatedOpportunities", fields: [createdById], references: [id])
-  quotations Quotation[]
-  orders     Order[]
-
-  @@index([leadId])
-  @@index([stage])
-  @@map("opportunities")
 }
 
 model Quotation {
   id                 String          @id @default(uuid())
   quotationNumber    String          @unique @map("quotation_number")
-  opportunityId      String?         @map("opportunity_id")
+  ticketId           String?         @map("ticket_id")
   customerId         String          @map("customer_id")
-  leadId             String?         @map("lead_id")
   validUntil         DateTime?       @map("valid_until") @db.Date
   subtotal           Decimal         @default(0) @db.Decimal(12, 2)
   taxAmount          Decimal         @default(0) @map("tax_amount") @db.Decimal(12, 2)
@@ -416,9 +399,8 @@ model Quotation {
   updatedAt          DateTime        @updatedAt @map("updated_at")
 
   // Relations
-  opportunity  Opportunity?          @relation(fields: [opportunityId], references: [id])
+  ticket       Ticket?               @relation(fields: [ticketId], references: [id])
   customer     Customer              @relation(fields: [customerId], references: [id])
-  lead         Lead?                 @relation(fields: [leadId], references: [id])
   createdBy    User                  @relation(fields: [createdById], references: [id])
   items        QuotationItem[]
   orders       Order[]
@@ -427,6 +409,50 @@ model Quotation {
   @@index([customerId])
   @@index([status])
   @@map("quotations")
+}
+
+model Proposal {
+  id                 String         @id @default(uuid())
+  proposalNumber     String         @unique @map("proposal_number")
+  ticketId           String         @map("ticket_id")
+  status             ProposalStatus @default(draft)
+  validUntil         DateTime?      @map("valid_until") @db.Date
+  subtotal           Decimal        @default(0) @db.Decimal(12, 2)
+  taxAmount          Decimal        @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  discountAmount     Decimal        @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  totalAmount        Decimal        @default(0) @map("total_amount") @db.Decimal(12, 2)
+  termsAndConditions String?        @map("terms_and_conditions") @db.Text
+  notes              String?        @db.Text
+  createdById        String         @map("created_by")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  ticket    Ticket         @relation(fields: [ticketId], references: [id])
+  createdBy User           @relation("CreatedProposals", fields: [createdById], references: [id])
+  items     ProposalItem[]
+
+  @@index([ticketId])
+  @@index([status])
+  @@map("proposals")
+}
+
+model ProposalItem {
+  id              String   @id @default(uuid())
+  proposalId      String   @map("proposal_id")
+  productName     String   @map("product_name")
+  description     String?  @db.Text
+  quantity        Int      @default(1)
+  unitPrice       Decimal  @map("unit_price") @db.Decimal(12, 2)
+  discountPercent Decimal  @default(0) @map("discount_percent") @db.Decimal(5, 2)
+  taxPercent      Decimal  @default(18) @map("tax_percent") @db.Decimal(5, 2)
+  totalPrice      Decimal  @map("total_price") @db.Decimal(12, 2)
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId])
+  @@map("proposal_items")
 }
 
 model QuotationItem {
@@ -452,8 +478,7 @@ model Order {
   id                   String      @id @default(uuid())
   orderNumber          String      @unique @map("order_number")
   customerId           String      @map("customer_id")
-  leadId               String?     @map("lead_id")
-  opportunityId        String?     @map("opportunity_id")
+  ticketId             String?     @map("ticket_id")
   quotationId          String?     @map("quotation_id")
   status               OrderStatus @default(created)
   totalAmount          Decimal     @map("total_amount") @db.Decimal(12, 2)
@@ -465,8 +490,7 @@ model Order {
 
   // Relations
   customer    Customer     @relation(fields: [customerId], references: [id])
-  lead        Lead?        @relation(fields: [leadId], references: [id])
-  opportunity Opportunity? @relation(fields: [opportunityId], references: [id])
+  ticket      Ticket?      @relation(fields: [ticketId], references: [id])
   quotation   Quotation?   @relation(fields: [quotationId], references: [id])
   createdBy   User         @relation(fields: [createdById], references: [id])
   items       OrderItem[]
@@ -491,6 +515,22 @@ model OrderItem {
 
   @@index([orderId])
   @@map("order_items")
+}
+
+model TicketStatusHistory {
+  id          String       @id @default(uuid())
+  ticketId    String       @map("ticket_id")
+  status      TicketStatus
+  enteredAt   DateTime     @map("entered_at")
+  exitedAt    DateTime?    @map("exited_at")
+  durationMs  BigInt?      @map("duration_ms")
+  changedById String       @map("changed_by")
+
+  ticket    Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  changedBy User   @relation("StatusHistoryChangedBy", fields: [changedById], references: [id])
+
+  @@index([ticketId])
+  @@map("ticket_status_history")
 }
 
 model AuditLog {

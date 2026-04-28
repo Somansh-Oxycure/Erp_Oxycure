@@ -6,6 +6,7 @@ export interface CRMFilters {
   search: string;
   dateRange: { from: string | null; to: string | null };
   productType: string;
+  status: string;
 }
 
 interface CRMState {
@@ -16,6 +17,7 @@ interface CRMState {
   setSearch: (s: string) => void;
   setDateRange: (range: { from: string | null; to: string | null }) => void;
   setProductType: (p: string) => void;
+  setStatus: (s: string) => void;
   resetFilters: () => void;
 }
 
@@ -23,6 +25,7 @@ const DEFAULT_FILTERS: CRMFilters = {
   search: '',
   dateRange: { from: null, to: null },
   productType: 'all',
+  status: '',
 };
 
 export const useCRMStore = create<CRMState>((set) => ({
@@ -33,5 +36,6 @@ export const useCRMStore = create<CRMState>((set) => ({
   setSearch: (s) => set((state) => ({ filters: { ...state.filters, search: s } })),
   setDateRange: (range) => set((state) => ({ filters: { ...state.filters, dateRange: range } })),
   setProductType: (p) => set((state) => ({ filters: { ...state.filters, productType: p } })),
+  setStatus: (s) => set((state) => ({ filters: { ...state.filters, status: s } })),
   resetFilters: () => set({ filters: DEFAULT_FILTERS }),
 }));

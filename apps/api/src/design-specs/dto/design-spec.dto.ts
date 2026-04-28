@@ -17,7 +17,7 @@ import { ProductType, DesignSpecStatus } from '@prisma/client';
 export class CreateDesignSpecDto {
   @ApiProperty()
   @IsUUID()
-  leadId: string;
+  ticketId: string;
 
   @ApiProperty({ enum: ProductType })
   @IsEnum(ProductType)
@@ -182,7 +182,7 @@ export class DesignSpecFilterDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  leadId?: string;
+  ticketId?: string;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

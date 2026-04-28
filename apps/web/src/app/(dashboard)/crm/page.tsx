@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search, X, ChevronDown, Calendar } from 'lucide-react';
@@ -49,7 +50,7 @@ function getDateRange(preset: DatePreset): { from: string | null; to: string | n
   return { from: null, to: null };
 }
 
-export default function CRMPage() {
+function CRMPageInner() {
   const router      = useRouter();
   const searchParams = useSearchParams();
 
@@ -185,6 +186,14 @@ export default function CRMPage() {
       {/* ── Create Lead Dialog ───────────────────────────────────────────────── */}
       <CreateLeadDialog open={showCreate} onClose={() => setShowCreate(false)} />
     </div>
+  );
+}
+
+export default function CRMPage() {
+  return (
+    <Suspense>
+      <CRMPageInner />
+    </Suspense>
   );
 }
 

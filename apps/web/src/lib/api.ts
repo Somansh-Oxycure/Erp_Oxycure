@@ -98,20 +98,21 @@ export const authApi = {
   me: () => api.get('/auth/me'),
 };
 
-export const leadsApi = {
-  findAll: (params: Record<string, unknown>) => api.get('/leads', { params }),
-  stats: () => api.get('/leads/stats'),
-  todayFollowUps: () => api.get('/leads/today-follow-ups'),
-  findOne: (id: string) => api.get(`/leads/${id}`),
-  create: (data: unknown) => api.post('/leads', data),
-  update: (id: string, data: unknown) => api.patch(`/leads/${id}`, data),
-  assign: (id: string, data: unknown) => api.patch(`/leads/${id}/assign`, data),
-  convert: (id: string, data: unknown) => api.post(`/leads/${id}/convert`, data),
-  addNote: (id: string, data: unknown) => api.post(`/leads/${id}/notes`, data),
-  createFollowUp: (id: string, data: unknown) => api.post(`/leads/${id}/follow-ups`, data),
+export const ticketsApi = {
+  findAll: (params: Record<string, unknown>) => api.get('/tickets', { params }),
+  stats: () => api.get('/tickets/stats'),
+  todayFollowUps: () => api.get('/tickets/today-follow-ups'),
+  findOne: (id: string) => api.get(`/tickets/${id}`),
+  aging: (id: string) => api.get(`/tickets/${id}/aging`),
+  create: (data: unknown) => api.post('/tickets', data),
+  update: (id: string, data: unknown) => api.patch(`/tickets/${id}`, data),
+  assign: (id: string, data: unknown) => api.patch(`/tickets/${id}/assign`, data),
+  convert: (id: string, data: unknown) => api.post(`/tickets/${id}/convert`, data),
+  addNote: (id: string, data: unknown) => api.post(`/tickets/${id}/notes`, data),
+  createFollowUp: (id: string, data: unknown) => api.post(`/tickets/${id}/follow-ups`, data),
   updateFollowUp: (id: string, fid: string, data: unknown) =>
-    api.patch(`/leads/${id}/follow-ups/${fid}`, data),
-  checkDuplicate: (phone: string) => api.get(`/leads/duplicates/${phone}`),
+    api.patch(`/tickets/${id}/follow-ups/${fid}`, data),
+  checkDuplicate: (phone: string) => api.get(`/tickets/duplicates/${phone}`),
 };
 
 export const customersApi = {
@@ -163,12 +164,18 @@ export const designSpecsApi = {
   pending: () => api.get('/design-specs/pending'),
 };
 
+export const proposalsApi = {
+  findAll: (params?: Record<string, unknown>) => api.get('/proposals', { params }),
+  stats: () => api.get('/proposals/stats'),
+  findOne: (id: string) => api.get(`/proposals/${id}`),
+  update: (id: string, data: unknown) => api.patch(`/proposals/${id}`, data),
+  updateStatus: (id: string, status: string, notes?: string) =>
+    api.patch(`/proposals/${id}/status`, { status, notes }),
+};
+
 export const opportunitiesApi = {
-  pipeline: () => api.get('/opportunities/pipeline'),
-  findAll: (params?: Record<string, unknown>) => api.get('/opportunities', { params }),
-  findOne: (id: string) => api.get(`/opportunities/${id}`),
-  create: (data: unknown) => api.post('/opportunities', data),
-  update: (id: string, data: unknown) => api.patch(`/opportunities/${id}`, data),
-  updateStage: (id: string, data: { stage: string; lostReason?: string; probability?: number }) =>
-    api.patch(`/opportunities/${id}/stage`, data),
+  // kept for backward compat but now delegates to tickets
+  pipeline: () => api.get('/tickets', { params: { status: 'new,contacted,site_inspection,design_review,quoted' } }),
+  findAll: (params?: Record<string, unknown>) => api.get('/tickets', { params }),
+  findOne: (id: string) => api.get(`/tickets/${id}`),
 };

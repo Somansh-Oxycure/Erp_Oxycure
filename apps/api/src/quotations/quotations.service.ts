@@ -16,8 +16,7 @@ export class QuotationItemDto {
 
 export class CreateQuotationDto {
   @ApiProperty() @IsString() customerId: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() leadId?: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() opportunityId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() ticketId?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() validUntil?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() termsAndConditions?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
@@ -76,7 +75,7 @@ export class QuotationsService {
         customer: true,
         items: { orderBy: { sortOrder: 'asc' } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
-        lead: { select: { id: true, leadNumber: true } },
+        ticket: { select: { id: true, ticketNumber: true } },
       },
     });
     if (!q) throw new NotFoundException(`Quotation ${id} not found`);
@@ -117,8 +116,7 @@ export class QuotationsService {
       data: {
         quotationNumber,
         customerId: dto.customerId,
-        leadId: dto.leadId,
-        opportunityId: dto.opportunityId,
+        ticketId: dto.ticketId,
         validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,
         subtotal,
         taxAmount,

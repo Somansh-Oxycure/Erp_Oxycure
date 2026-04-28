@@ -4,13 +4,13 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
-import { LeadsModule } from './leads/leads.module';
+import { TicketsModule } from './tickets/tickets.module';
 import { CustomersModule } from './customers/customers.module';
 import { DesignSpecsModule } from './design-specs/design-specs.module';
-import { OpportunitiesModule } from './opportunities/opportunities.module';
 import { QuotationsModule } from './quotations/quotations.module';
 import { OrdersModule } from './orders/orders.module';
 import { AuditModule } from './audit/audit.module';
+import { ProposalsModule } from './proposals/proposals.module';
 
 @Module({
   imports: [
@@ -22,13 +22,13 @@ import { AuditModule } from './audit/audit.module';
     PrismaModule,
     AuthModule,
     UsersModule,
-    LeadsModule,
+    TicketsModule,
     CustomersModule,
     DesignSpecsModule,
-    OpportunitiesModule,
     QuotationsModule,
     OrdersModule,
     AuditModule,
+    ProposalsModule,
   ],
 })
 export class AppModule {}

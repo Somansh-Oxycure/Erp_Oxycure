@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
-/** /leads redirects to the unified CRM page (Leads List view). */
+/** /leads redirects to the unified Tickets page. */
 export default function LeadsRedirectPage() {
-  redirect('/crm?view=list');
+  redirect('/tickets');
 }
 

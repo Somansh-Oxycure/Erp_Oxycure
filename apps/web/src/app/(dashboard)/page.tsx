@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Target, Users2, FileText, ShoppingBag, TrendingUp, ArrowRight } from 'lucide-react';
-import { leadsApi, customersApi, quotationsApi, ordersApi } from '@/lib/api';
+import { ticketsApi, customersApi, quotationsApi, ordersApi } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils';
@@ -11,29 +11,29 @@ import { formatCurrency } from '@/lib/utils';
 export default function DashboardPage() {
   const { user } = useAuthStore();
 
-  const { data: leadStats } = useQuery({
-    queryKey: ['lead-stats'],
-    queryFn: () => leadsApi.stats(),
+  const { data: ticketStats } = useQuery({
+    queryKey: ['ticket-stats'],
+    queryFn: () => ticketsApi.stats(),
   });
 
-  const stats = leadStats?.data?.data;
+  const stats = ticketStats?.data?.data ?? ticketStats?.data;
 
   const cards = [
     {
-      label: 'Total Leads',
+      label: 'Total Tickets',
       value: stats?.total ?? '—',
       sub: `${stats?.newThisWeek ?? 0} new this week`,
       icon: Target,
       color: 'bg-sky-50 text-sky-600',
-      href: '/leads',
+      href: '/tickets',
     },
     {
       label: 'Pipeline Value',
       value: stats ? formatCurrency(stats.pipelineValue) : '—',
-      sub: `${stats?.conversionRate ?? 0}% conversion`,
+      sub: `Active pipeline`,
       icon: TrendingUp,
       color: 'bg-emerald-50 text-emerald-600',
-      href: '/leads',
+      href: '/tickets',
     },
     {
       label: "Today's Follow-ups",
@@ -41,7 +41,7 @@ export default function DashboardPage() {
       sub: stats?.overdueFollowUps ? `${stats.overdueFollowUps} overdue` : 'All on track',
       icon: FileText,
       color: 'bg-amber-50 text-amber-600',
-      href: '/leads',
+      href: '/tickets',
     },
   ];
 
@@ -85,7 +85,7 @@ export default function DashboardPage() {
         <p className="text-sm font-semibold text-slate-700 mb-3">Quick Access</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
-            { href: '/leads', icon: Target, label: 'Leads', color: 'text-sky-600 bg-sky-50' },
+            { href: '/tickets', icon: Target, label: 'Tickets', color: 'text-sky-600 bg-sky-50' },
             { href: '/customers', icon: Users2, label: 'Customers', color: 'text-blue-600 bg-blue-50' },
             { href: '/quotations', icon: FileText, label: 'Quotations', color: 'text-amber-600 bg-amber-50' },
             { href: '/orders', icon: ShoppingBag, label: 'Orders', color: 'text-emerald-600 bg-emerald-50' },

@@ -68,7 +68,7 @@ export class DesignSpecsService {
     filters: DesignSpecFilterDto,
     currentUser: { id: string; role: UserRole },
   ) {
-    const { page = 1, limit = 20, status, productType, leadId } = filters;
+    const { page = 1, limit = 20, status, productType, ticketId } = filters;
 
     const where: Prisma.DesignSpecificationWhereInput = {};
 
@@ -79,7 +79,7 @@ export class DesignSpecsService {
 
     if (status) where.status = status;
     if (productType) where.productType = productType;
-    if (leadId) where.leadId = leadId;
+    if (ticketId) where.ticketId = ticketId;
 
     const [data, total] = await Promise.all([
       this.prisma.designSpecification.findMany({
@@ -134,23 +134,15 @@ export class DesignSpecsService {
     dto: CreateDesignSpecDto,
     currentUser: { id: string; role: UserRole },
   ) {
-    const lead = await this.prisma.lead.findUnique({ where: { id: dto.leadId } });
-    if (!lead) throw new NotFoundException('Lead not found');
-
-    // Must be qualified or later
-    const allowedStatuses = ['qualified', 'quoted', 'won'];
-    if (!allowedStatuses.includes(lead.status)) {
-      throw new BadRequestException(
-        'Design spec can only be created for leads in "qualified" status or later',
-      );
-    }
+    const ticket = await this.prisma.ticket.findUnique({ where: { id: dto.ticketId } });
+    if (!ticket) throw new NotFoundException('Ticket not found');
 
     const specNumber = await this.generateSpecNumber();
 
     const spec = await this.prisma.designSpecification.create({
       data: {
         specNumber,
-        leadId: dto.leadId,
+        ticketId: dto.ticketId,
         productType: dto.productType,
         requirementSummary: dto.requirementSummary,
         siteAreaSqft: dto.siteAreaSqft,
@@ -322,7 +314,7 @@ export class DesignSpecsService {
         data: {
           quotationNumber,
           customerId: dto.customerId,
-          leadId: spec.leadId,
+          ticketId: spec.ticketId,
           validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,
           subtotal,
           taxAmount,

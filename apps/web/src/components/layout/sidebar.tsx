@@ -24,10 +24,11 @@ import { toast } from 'sonner';
 
 const NAV_ITEMS = [
   { label: 'Dashboard', icon: LayoutDashboard, href: '/' },
-  { label: 'CRM', icon: LayoutGrid, href: '/crm' },
+  { label: 'Tickets', icon: LayoutGrid, href: '/tickets' },
+  { label: 'Proposals', icon: FileText, href: '/proposals' },
   { label: 'Customers', icon: Users2, href: '/customers' },
   { label: 'Design Specs', icon: ClipboardList, href: '/design-specs' },
-  { label: 'Quotations', icon: FileText, href: '/quotations' },
+  { label: 'Quotations', icon: Target, href: '/quotations' },
   { label: 'Orders', icon: ShoppingBag, href: '/orders' },
   { label: 'Users', icon: Briefcase, href: '/users', adminOnly: true },
 ];

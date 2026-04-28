@@ -31,7 +31,7 @@ export class CustomersService {
         where,
         include: {
           _count: { select: { orders: true } },
-          lead: { select: { id: true, leadNumber: true, status: true } },
+          ticket: { select: { id: true, ticketNumber: true, status: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -51,7 +51,7 @@ export class CustomersService {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
-        lead: { select: { id: true, leadNumber: true, status: true } },
+        ticket: { select: { id: true, ticketNumber: true, status: true } },
         orders: {
           select: {
             id: true,

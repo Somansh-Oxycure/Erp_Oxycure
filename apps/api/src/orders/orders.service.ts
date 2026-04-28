@@ -14,7 +14,7 @@ export class OrderItemDto {
 
 export class CreateOrderDto {
   @ApiProperty() @IsString() customerId: string;
-  @ApiPropertyOptional() @IsOptional() @IsString() leadId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() ticketId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() quotationId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
   @ApiPropertyOptional() @IsOptional() @IsDateString() expectedDeliveryDate?: string;
@@ -66,7 +66,7 @@ export class OrdersService {
         customer: true,
         items: { orderBy: { sortOrder: 'asc' } },
         quotation: { select: { id: true, quotationNumber: true } },
-        lead: { select: { id: true, leadNumber: true } },
+        ticket: { select: { id: true, ticketNumber: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
@@ -92,7 +92,7 @@ export class OrdersService {
       data: {
         orderNumber,
         customerId: dto.customerId,
-        leadId: dto.leadId,
+        ticketId: dto.ticketId,
         quotationId: dto.quotationId,
         totalAmount,
         notes: dto.notes,
