@@ -12,11 +12,9 @@ import {
   AssignTicketDto,
   ConvertTicketDto,
   CreateTicketNoteDto,
-  CreateFollowUpDto,
-  UpdateFollowUpDto,
   TicketFilterDto,
 } from './dto/ticket.dto';
-import { NoteType, Prisma, TicketStatus, UserRole } from '@prisma/client';
+import { NoteType, Prisma, UserRole, TicketStatus } from '@prisma/client';
 
 const TICKET_INCLUDE = {
   assignedTo: {
@@ -35,7 +33,7 @@ const TICKET_INCLUDE = {
     orderBy: { enteredAt: 'desc' as const },
   },
   _count: {
-    select: { notes: true, followUps: true },
+    select: { notes: true },
   },
 };
 
@@ -46,13 +44,26 @@ export class TicketsService {
     private auditService: AuditService,
   ) {}
 
-  // ─── Auto-generate Ticket Number ─────────────────────────────────────────
-  private async generateTicketNumber(): Promise<string> {
-    const last = await this.prisma.ticket.findFirst({
-      orderBy: { createdAt: 'desc' },
+  // ─── Financial-year label (e.g. "26/27") ────────────────────────────────
+  private getFYLabel(): string {
+    const now = new Date();
+    const fyStart = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+    const fyEnd = fyStart + 1;
+    return `${String(fyStart).slice(-2)}/${String(fyEnd).slice(-2)}`;
+  }
+
+  // ─── Auto-generate Reference ID  (REF-26/27-XXXX) ────────────────────────
+  private async generateReferenceId(): Promise<string> {
+    const fyLabel = this.getFYLabel();
+    const counter = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.referenceCounter.upsert({
+        where: { id: fyLabel },
+        create: { id: fyLabel, lastSeq: 1 },
+        update: { lastSeq: { increment: 1 } },
+      });
+      return updated.lastSeq;
     });
-    const next = last ? parseInt(last.ticketNumber.split('-')[1]) + 1 : 1;
-    return `TKT-${String(next).padStart(4, '0')}`;
+    return `REF-${fyLabel}-${String(counter).padStart(4, '0')}`;
   }
 
   // ─── List Tickets ─────────────────────────────────────────────────────────
@@ -78,6 +89,7 @@ export class TicketsService {
 
     const where: Prisma.TicketWhereInput = {};
 
+    // TODO: unit test role scoping
     if (currentUser.role === 'salesperson') {
       where.assignedToId = currentUser.id;
     }
@@ -89,7 +101,7 @@ export class TicketsService {
         { phone: { contains: search } },
         { email: { contains: search, mode: 'insensitive' } },
         { projectName: { contains: search, mode: 'insensitive' } },
-        { ticketNumber: { contains: search, mode: 'insensitive' } },
+        { referenceId: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -140,7 +152,10 @@ export class TicketsService {
 
     return {
       success: true,
-      data: tickets,
+      data: tickets.map((t) => ({
+        ...t,
+        agingDays: Math.floor((Date.now() - t.createdAt.getTime()) / 86_400_000),
+      })),
       meta: {
         page,
         limit,
@@ -157,15 +172,12 @@ export class TicketsService {
 
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const [
       total,
       byStatus,
       newThisWeek,
       pipelineValue,
-      todayFollowUps,
-      overdueFollowUps,
     ] = await Promise.all([
       this.prisma.ticket.count({ where: baseWhere }),
       this.prisma.ticket.groupBy({
@@ -179,33 +191,12 @@ export class TicketsService {
       this.prisma.ticket.aggregate({
         where: {
           ...baseWhere,
-          status: { in: ['new', 'contacted', 'site_inspection', 'design_review', 'quoted'] },
+          status: { in: ['new', 'contacted'] },
           estimatedValue: { not: null },
         },
         _sum: { estimatedValue: true },
       }),
-      this.prisma.ticketFollowUp.count({
-        where: {
-          ticket: baseWhere,
-          scheduledAt: { gte: today, lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) },
-          status: 'pending',
-        },
-      }),
-      this.prisma.ticketFollowUp.count({
-        where: {
-          ticket: baseWhere,
-          scheduledAt: { lt: today },
-          status: 'pending',
-        },
-      }),
     ]);
-
-    const wonCount = byStatus.find((s) => s.status === 'won')?._count.status || 0;
-    const lostCount = byStatus.find((s) => s.status === 'lost')?._count.status || 0;
-    const conversionRate =
-      wonCount + lostCount > 0
-        ? Math.round((wonCount / (wonCount + lostCount)) * 100)
-        : 0;
 
     const statusMap: Record<string, number> = {};
     byStatus.forEach((s) => {
@@ -216,41 +207,15 @@ export class TicketsService {
       total,
       byStatus: statusMap,
       newThisWeek,
-      conversionRate,
       pipelineValue: pipelineValue._sum.estimatedValue || 0,
-      todayFollowUps,
-      overdueFollowUps,
     };
-  }
-
-  // ─── Today Follow-ups ─────────────────────────────────────────────────────
-  async getTodayFollowUps(currentUser: { id: string; role: UserRole }) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
-
-    return this.prisma.ticketFollowUp.findMany({
-      where: {
-        scheduledAt: { gte: today, lt: tomorrow },
-        status: 'pending',
-        ...(currentUser.role === 'salesperson'
-          ? { ticket: { assignedToId: currentUser.id } }
-          : {}),
-      },
-      include: {
-        ticket: {
-          select: { id: true, ticketNumber: true, clientName: true, name: true },
-        },
-      },
-      orderBy: { scheduledAt: 'asc' },
-    });
   }
 
   // ─── Check Duplicate Phone ────────────────────────────────────────────────
   async checkDuplicatePhone(phone: string) {
     const ticket = await this.prisma.ticket.findFirst({
       where: { phone },
-      select: { id: true, ticketNumber: true, clientName: true, name: true, status: true },
+      select: { id: true, referenceId: true, clientName: true, name: true, status: true },
     });
     return { isDuplicate: !!ticket, ticket };
   }
@@ -267,20 +232,13 @@ export class TicketsService {
           },
           orderBy: { createdAt: 'desc' },
         },
-        followUps: {
-          include: {
-            createdBy: { select: { id: true, firstName: true, lastName: true } },
-          },
-          orderBy: { scheduledAt: 'asc' },
-        },
         designSpecs: {
-          select: { id: true, specNumber: true, status: true, requirementSummary: true, createdAt: true },
+          select: { id: true, status: true, requirementSummary: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
         },
         quotations: {
           select: {
             id: true,
-            quotationNumber: true,
             status: true,
             totalAmount: true,
             createdAt: true,
@@ -288,13 +246,12 @@ export class TicketsService {
           orderBy: { createdAt: 'desc' },
         },
         orders: {
-          select: { id: true, orderNumber: true, status: true, totalAmount: true, createdAt: true },
+          select: { id: true, status: true, totalAmount: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
         },
         proposals: {
           select: {
             id: true,
-            proposalNumber: true,
             status: true,
             totalAmount: true,
             validUntil: true,
@@ -316,16 +273,19 @@ export class TicketsService {
       throw new ForbiddenException('Access denied to this ticket');
     }
 
-    return ticket;
+    return {
+      ...ticket,
+      agingDays: Math.floor((Date.now() - ticket.createdAt.getTime()) / 86_400_000),
+    };
   }
 
   // ─── Create Ticket ────────────────────────────────────────────────────────
   async create(dto: CreateTicketDto, createdById: string) {
-    const ticketNumber = await this.generateTicketNumber();
+    const referenceId = await this.generateReferenceId();
 
     const ticket = await this.prisma.ticket.create({
       data: {
-        ticketNumber,
+        referenceId,
         clientName: dto.clientName,
         name: dto.name,
         phone: dto.phone,
@@ -360,7 +320,7 @@ export class TicketsService {
       action: 'CREATE',
       entityType: 'tickets',
       entityId: ticket.id,
-      changes: { after: { ticketNumber, status: 'new' } },
+      changes: { after: { referenceId, status: 'new' } },
     });
 
     // Record initial status in history
@@ -498,98 +458,45 @@ export class TicketsService {
       throw new BadRequestException('An active proposal already exists for this ticket');
     }
 
-    // Generate proposal number
-    const year = new Date().getFullYear();
-    const count = await this.prisma.proposal.count({
-      where: { proposalNumber: { startsWith: `PROP-${year}-` } },
-    });
-    const proposalNumber = `PROP-${year}-${String(count + 1).padStart(4, '0')}`;
-
     const result = await this.prisma.$transaction(async (tx) => {
-      // Calculate totals from line items
-      let subtotal = 0;
-      let taxAmount = 0;
-      let discountAmount = 0;
-
-      const processedItems = (dto.items || []).map((item, index) => {
-        const base = item.quantity * item.unitPrice;
-        const discAmt = base * ((item.discountPercent || 0) / 100);
-        const afterDiscount = base - discAmt;
-        const taxAmt = afterDiscount * ((item.taxPercent ?? 18) / 100);
-        subtotal += base;
-        discountAmount += discAmt;
-        taxAmount += taxAmt;
-        return {
-          productName: item.productName,
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discountPercent: item.discountPercent || 0,
-          taxPercent: item.taxPercent ?? 18,
-          totalPrice: afterDiscount + taxAmt,
-          sortOrder: index,
-        };
-      });
-
-      const calculatedTotal = subtotal - discountAmount + taxAmount;
-      const totalAmount = calculatedTotal > 0
-        ? calculatedTotal
-        : (ticket.estimatedValue ? Number(ticket.estimatedValue) : 0);
-
       const proposal = await tx.proposal.create({
         data: {
-          proposalNumber,
           ticketId: id,
           status: 'draft',
-          validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,
-          subtotal,
-          taxAmount,
-          discountAmount,
-          totalAmount,
-          notes: dto.notes || ticket.requirementNotes || undefined,
-          termsAndConditions: dto.termsAndConditions,
+          subtotal: 0,
+          taxAmount: 0,
+          discountAmount: 0,
+          totalAmount: ticket.estimatedValue ? Number(ticket.estimatedValue) : 0,
           createdById: currentUser.id,
-          items: { create: processedItems },
+          ...(dto.initialNote && {
+            notes: {
+              create: {
+                content: dto.initialNote,
+                createdById: currentUser.id,
+              },
+            },
+          }),
         },
-        include: { items: true },
+        include: {
+          notes: {
+            include: { createdBy: { select: { id: true, firstName: true, lastName: true } } },
+            orderBy: { createdAt: 'asc' as const },
+          },
+        },
       });
-
-      const convertedAt = new Date();
-
+      
       await tx.ticket.update({
         where: { id },
         data: {
-          status: 'quoted' as TicketStatus,
-          convertedAt,
+          convertedAt: new Date(),
           convertedById: currentUser.id,
-        },
-      });
-
-      // Close current history entry and open 'quoted'
-      const currentHistory = await tx.ticketStatusHistory.findFirst({
-        where: { ticketId: id, exitedAt: null },
-        orderBy: { enteredAt: 'desc' },
-      });
-      if (currentHistory) {
-        const durationMs = BigInt(convertedAt.getTime() - currentHistory.enteredAt.getTime());
-        await tx.ticketStatusHistory.update({
-          where: { id: currentHistory.id },
-          data: { exitedAt: convertedAt, durationMs },
-        });
-      }
-      await tx.ticketStatusHistory.create({
-        data: {
-          ticketId: id,
-          status: 'quoted' as TicketStatus,
-          enteredAt: convertedAt,
-          changedById: currentUser.id,
         },
       });
 
       await tx.ticketNote.create({
         data: {
           ticketId: id,
-          content: `Ticket converted to proposal ${proposalNumber}`,
+          content: `Ticket converted to proposal (REF: ${ticket.referenceId})`,
           type: NoteType.status_change,
           createdById: currentUser.id,
         },
@@ -603,7 +510,7 @@ export class TicketsService {
       action: 'CONVERT',
       entityType: 'tickets',
       entityId: id,
-      changes: { after: { status: 'quoted', proposalNumber } },
+      changes: { after: { proposalId: result.id } },
     });
 
     return result;
@@ -622,43 +529,6 @@ export class TicketsService {
       include: {
         createdBy: { select: { id: true, firstName: true, lastName: true, role: true } },
       },
-    });
-  }
-
-  // ─── Create Follow-up ─────────────────────────────────────────────────────
-  async createFollowUp(id: string, dto: CreateFollowUpDto, createdById: string) {
-    await this.findOneRaw(id);
-    const followUp = await this.prisma.ticketFollowUp.create({
-      data: {
-        ticketId: id,
-        scheduledAt: new Date(dto.scheduledAt),
-        outcome: dto.outcome,
-        createdById,
-      },
-      include: {
-        createdBy: { select: { id: true, firstName: true, lastName: true } },
-      },
-    });
-
-    // Update nextFollowUpDate on the ticket
-    await this.prisma.ticket.update({
-      where: { id },
-      data: { nextFollowUpDate: new Date(dto.scheduledAt) },
-    });
-
-    return followUp;
-  }
-
-  // ─── Update Follow-up ─────────────────────────────────────────────────────
-  async updateFollowUp(
-    _ticketId: string,
-    fid: string,
-    dto: UpdateFollowUpDto,
-    _userId: string,
-  ) {
-    return this.prisma.ticketFollowUp.update({
-      where: { id: fid },
-      data: dto,
     });
   }
 
@@ -710,7 +580,7 @@ export class TicketsService {
 
     return {
       ticketId: id,
-      ticketNumber: ticket.ticketNumber,
+      referenceId: ticket.referenceId,
       currentStatus: ticket.status,
       createdAt: ticket.createdAt,
       totalAgeDays: totalMs / (1000 * 60 * 60 * 24),

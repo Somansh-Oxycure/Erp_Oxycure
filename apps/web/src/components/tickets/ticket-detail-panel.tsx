@@ -9,11 +9,10 @@ import {
   Building2,
   Calendar,
   Tag,
-  Clock,
-  ArrowRight,
   DollarSign,
   FileText,
   ChevronRight,
+  ArrowRight,
   Loader2,
   AlertCircle,
 } from 'lucide-react';
@@ -21,14 +20,12 @@ import {
   cn,
   formatCurrency,
   formatDateTime,
-  formatFollowUpDate,
   getInitials,
   getAvatarColor,
   STATUS_CONFIG,
   PRIORITY_CONFIG,
   PRODUCT_TYPE_LABELS,
   SOURCE_LABELS,
-  isOverdue,
 } from '@/lib/utils';
 import { useQuery } from '@tanstack/react-query';
 import { ticketsApi } from '@/lib/api';
@@ -73,7 +70,7 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
                 {ticket && (
                   <>
                     <ChevronRight className="w-3 h-3" />
-                    <span className="text-foreground font-semibold">{ticket.ticketNumber}</span>
+                    <span className="text-foreground font-semibold">{ticket.referenceId}</span>
                   </>
                 )}
               </div>
@@ -145,12 +142,7 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
                     <DetailCard icon={DollarSign} label="Est. Value" value={formatCurrency(ticket.estimatedValue)} color="text-emerald-600" />
                     <DetailCard icon={Tag} label="Product" value={PRODUCT_TYPE_LABELS[ticket.productType] || ticket.productType} color="text-sky-600" />
                     <DetailCard icon={FileText} label="Source" value={SOURCE_LABELS[ticket.source] || ticket.source} color="text-blue-600" />
-                    <DetailCard
-                      icon={Calendar}
-                      label="Follow-up"
-                      value={formatFollowUpDate(ticket.nextFollowUpDate)}
-                      color={ticket.nextFollowUpDate && isOverdue(ticket.nextFollowUpDate) ? 'text-red-600' : 'text-muted-foreground'}
-                    />
+                    <DetailCard icon={Calendar} label="Created" value={formatDateTime(ticket.createdAt)} color="text-muted-foreground" />
                   </div>
 
                   {/* ── Contact ── */}
@@ -199,33 +191,6 @@ export function TicketDetailPanel({ ticketId, onClose }: TicketDetailPanelProps)
                             <p className="text-xs text-muted-foreground mt-1.5">
                               {note.createdBy?.firstName} · {formatDateTime(note.createdAt)}
                             </p>
-                          </div>
-                        ))}
-                      </div>
-                    </Section>
-                  )}
-
-                  {/* ── Follow-ups ── */}
-                  {ticket.followUps && ticket.followUps.length > 0 && (
-                    <Section title={`Follow-ups (${ticket.followUps.length})`}>
-                      <div className="space-y-2">
-                        {ticket.followUps.slice(0, 3).map((fu: { id: string; scheduledAt: string; outcome: string; status: string }) => (
-                          <div
-                            key={fu.id}
-                            className={cn(
-                              'p-3 rounded-xl border flex items-start gap-3',
-                              fu.status === 'completed'
-                                ? 'bg-emerald-500/5 border-emerald-500/20'
-                                : isOverdue(fu.scheduledAt)
-                                ? 'bg-red-500/5 border-red-500/20'
-                                : 'bg-muted/40 border-border',
-                            )}
-                          >
-                            <Clock className={cn('w-4 h-4 mt-0.5 shrink-0', fu.status === 'completed' ? 'text-emerald-500' : isOverdue(fu.scheduledAt) ? 'text-red-500' : 'text-muted-foreground')} />
-                            <div>
-                              <p className="text-xs font-semibold text-foreground">{formatFollowUpDate(fu.scheduledAt)}</p>
-                              {fu.outcome && <p className="text-xs text-muted-foreground mt-0.5">{fu.outcome}</p>}
-                            </div>
                           </div>
                         ))}
                       </div>

@@ -51,11 +51,11 @@ export default function QuotationsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {quotations.map((q: { id: string; quotationNumber: string; customer?: { companyName?: string; contactPerson: string }; status: string; totalAmount?: number; validUntil?: string; createdAt: string }) => {
+              {quotations.map((q: { id: string; customer?: { companyName?: string; contactPerson: string }; status: string; totalAmount?: number; validUntil?: string; createdAt: string }) => {
                 const sc = QT_STATUS[q.status];
                 return (
                   <tr key={q.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-semibold text-slate-800">{q.quotationNumber}</td>
+                    <td className="px-5 py-4 text-sm font-semibold text-slate-800">{q.id.slice(0, 8).toUpperCase()}</td>
                     <td className="px-5 py-4 text-sm text-slate-600">
                       {q.customer?.companyName || q.customer?.contactPerson || '—'}
                     </td>

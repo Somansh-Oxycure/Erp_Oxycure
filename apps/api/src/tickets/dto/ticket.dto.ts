@@ -13,7 +13,7 @@ import {
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { TicketSource, TicketStatus, Priority, ProductType, NoteType, FollowUpStatus } from '@prisma/client';
+import { TicketSource, TicketStatus, Priority, ProductType, NoteType } from '@prisma/client';
 import { Type } from 'class-transformer';
 
 export class CreateTicketDto {
@@ -314,27 +314,10 @@ export class ProposalLineItemDto {
 }
 
 export class ConvertTicketDto {
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsDateString()
-  validUntil?: string;
-
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Optional initial note to attach to the new proposal' })
   @IsOptional()
   @IsString()
-  notes?: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  termsAndConditions?: string;
-
-  @ApiPropertyOptional({ type: [ProposalLineItemDto] })
-  @IsOptional()
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => ProposalLineItemDto)
-  items?: ProposalLineItemDto[];
+  initialNote?: string;
 }
 
 export class CreateTicketNoteDto {
@@ -347,29 +330,6 @@ export class CreateTicketNoteDto {
   @IsOptional()
   @IsEnum(NoteType)
   type?: NoteType;
-}
-
-export class CreateFollowUpDto {
-  @ApiProperty()
-  @IsDateString()
-  scheduledAt: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  outcome?: string;
-}
-
-export class UpdateFollowUpDto {
-  @ApiPropertyOptional({ enum: FollowUpStatus })
-  @IsOptional()
-  @IsEnum(FollowUpStatus)
-  status?: FollowUpStatus;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  outcome?: string;
 }
 
 export class TicketFilterDto {

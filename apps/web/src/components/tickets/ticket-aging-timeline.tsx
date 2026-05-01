@@ -19,7 +19,7 @@ type AgingEntry = {
 
 type AgingData = {
   ticketId: string;
-  ticketNumber: string;
+  referenceId: string;
   currentStatus: string;
   createdAt: string;
   totalAgeDays: number;

@@ -1,14 +1,17 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { handlePrismaError } from '../common/utils/prisma-error.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, AddProposalItemDto } from './dto/proposal.dto';
+import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, AddProposalItemDto, CreateProposalFollowUpDto, UpdateProposalFollowUpDto, AddProposalNoteDto } from './dto/proposal.dto';
 import { ProposalStatus, UserRole } from '@prisma/client';
+import { extname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 
 const PROPOSAL_INCLUDE = {
   ticket: {
     select: {
       id: true,
-      ticketNumber: true,
+      referenceId: true,
       clientName: true,
       name: true,
       phone: true,
@@ -22,6 +25,21 @@ const PROPOSAL_INCLUDE = {
   },
   items: {
     orderBy: { sortOrder: 'asc' as const },
+  },
+  notes: {
+    include: {
+      createdBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { createdAt: 'asc' as const },
+  },
+  followUps: {
+    include: {
+      createdBy: { select: { id: true, firstName: true, lastName: true } },
+    },
+    orderBy: { scheduledAt: 'asc' as const },
+  },
+  _count: {
+    select: { followUps: true, notes: true },
   },
 };
 
@@ -75,6 +93,7 @@ export class ProposalsService {
 
     const where: Record<string, unknown> = {};
 
+    // TODO: unit test role scoping
     if (currentUser.role === 'salesperson') {
       where.ticket = { assignedToId: currentUser.id };
     }
@@ -84,7 +103,7 @@ export class ProposalsService {
 
     if (search) {
       where.OR = [
-        { proposalNumber: { contains: search, mode: 'insensitive' } },
+        { ticket: { referenceId: { contains: search, mode: 'insensitive' } } },
         { ticket: { clientName: { contains: search, mode: 'insensitive' } } },
         { ticket: { projectName: { contains: search, mode: 'insensitive' } } },
       ];
@@ -149,7 +168,6 @@ export class ProposalsService {
       where: { id },
       data: {
         ...(dto.validUntil && { validUntil: new Date(dto.validUntil) }),
-        ...(dto.notes !== undefined && { notes: dto.notes }),
         ...(dto.termsAndConditions !== undefined && { termsAndConditions: dto.termsAndConditions }),
         ...totalsUpdate,
       },
@@ -175,12 +193,13 @@ export class ProposalsService {
   ) {
     const proposal = await this.findOne(id);
 
+    // Strict transition map: draft → sent only; sent → accepted|rejected|expired; rest terminal
     const validTransitions: Record<ProposalStatus, ProposalStatus[]> = {
-      draft: ['sent', 'expired'],
-      sent: ['accepted', 'rejected', 'expired'],
+      draft:    ['sent'],
+      sent:     ['accepted', 'rejected', 'expired'],
       accepted: [],
       rejected: [],
-      expired: [],
+      expired:  [],
     };
 
     if (!validTransitions[proposal.status]?.includes(dto.status)) {
@@ -189,14 +208,18 @@ export class ProposalsService {
       );
     }
 
-    const updated = await this.prisma.proposal.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        ...(dto.notes && { notes: dto.notes }),
-      },
-      include: PROPOSAL_INCLUDE,
-    });
+    let updated;
+    try {
+      updated = await this.prisma.proposal.update({
+        where: { id },
+        data: {
+          status: dto.status,
+        },
+        include: PROPOSAL_INCLUDE,
+      });
+    } catch (err) {
+      handlePrismaError(err);
+    }
 
     // If accepted, mark the ticket as won
     if (dto.status === 'accepted') {
@@ -214,7 +237,7 @@ export class ProposalsService {
       changes: { before: { status: proposal.status }, after: { status: dto.status } },
     });
 
-    return updated;
+    return { message: `Status updated to ${dto.status}`, data: updated };
   }
 
   // ─── Stats ────────────────────────────────────────────────────────────────
@@ -224,7 +247,10 @@ export class ProposalsService {
         ? { ticket: { assignedToId: currentUser.id } }
         : {};
 
-    const [total, byStatus, totalValue] = await Promise.all([
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const [total, byStatus, totalValue, todayFollowUps, overdueFollowUps] = await Promise.all([
       this.prisma.proposal.count({ where: baseWhere }),
       this.prisma.proposal.groupBy({
         by: ['status'],
@@ -235,6 +261,20 @@ export class ProposalsService {
         where: { ...baseWhere, status: { in: ['draft', 'sent'] } },
         _sum: { totalAmount: true },
       }),
+      this.prisma.proposalFollowUp.count({
+        where: {
+          proposal: baseWhere,
+          scheduledAt: { gte: today, lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) },
+          status: 'pending',
+        },
+      }),
+      this.prisma.proposalFollowUp.count({
+        where: {
+          proposal: baseWhere,
+          scheduledAt: { lt: today },
+          status: 'pending',
+        },
+      }),
     ]);
 
     const statusMap: Record<string, number> = {};
@@ -244,6 +284,152 @@ export class ProposalsService {
       total,
       byStatus: statusMap,
       pipelineValue: totalValue._sum.totalAmount || 0,
+      todayFollowUps,
+      overdueFollowUps,
     };
+  }
+
+  // ─── Today Follow-ups ────────────────────────────────────────────────────
+  async getTodayFollowUps(currentUser: { id: string; role: UserRole }) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+
+    return this.prisma.proposalFollowUp.findMany({
+      where: {
+        scheduledAt: { gte: today, lt: tomorrow },
+        status: 'pending',
+        ...(currentUser.role === 'salesperson'
+          ? { proposal: { ticket: { assignedToId: currentUser.id } } }
+          : {}),
+      },
+      include: {
+        proposal: {
+          select: {
+            id: true,
+            ticket: { select: { referenceId: true, clientName: true, projectName: true } },
+          },
+        },
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
+  }
+
+  // ─── Create Follow-up ────────────────────────────────────────────────────
+  async createFollowUp(id: string, dto: CreateProposalFollowUpDto, createdById: string) {
+    await this.findOne(id);
+
+    const followUp = await this.prisma.proposalFollowUp.create({
+      data: {
+        proposalId: id,
+        scheduledAt: new Date(dto.scheduledAt),
+        outcome: dto.outcome,
+        createdById,
+      },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    // Update nextFollowUpDate on the proposal
+    await this.prisma.proposal.update({
+      where: { id },
+      data: { nextFollowUpDate: new Date(dto.scheduledAt) },
+    });
+
+    return followUp;
+  }
+
+  // ─── Update Follow-up ────────────────────────────────────────────────────
+  async updateFollowUp(fid: string, dto: UpdateProposalFollowUpDto) {
+    return this.prisma.proposalFollowUp.update({
+      where: { id: fid },
+      data: dto,
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  // ─── Add Note ─────────────────────────────────────────────────────────────
+  async addNote(id: string, dto: AddProposalNoteDto, createdById: string) {
+    await this.findOne(id);
+    return this.prisma.proposalNote.create({
+      data: {
+        proposalId: id,
+        content: dto.content,
+        createdById,
+      },
+      include: {
+        createdBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
+  // ─── Upload Document ──────────────────────────────────────────────────────
+  async uploadDocument(
+    id: string,
+    file: Express.Multer.File,
+  ) {
+    // ProposalUploadInterceptor has already:
+    //   • deleted the previous document file
+    //   • written the new file as <refNumber>.<ext> via diskStorage
+    // All that remains is persisting the URL in the database.
+    await this.findOne(id);
+
+    const documentUrl = `/uploads/proposals/${file.filename}`;
+
+    return this.prisma.proposal.update({
+      where: { id },
+      data: {
+        documentUrl,
+        documentOriginalName: file.originalname,
+      },
+      include: PROPOSAL_INCLUDE,
+    });
+  }
+
+  // ─── Get Document Info (for download endpoint) ────────────────────────────
+  async getDocumentInfo(id: string) {
+    const proposal = await this.findOne(id);
+
+    if (!proposal.documentUrl) {
+      throw new NotFoundException('No document uploaded for this proposal');
+    }
+
+    const filename = proposal.documentUrl.split('/').pop() as string;
+    const filePath = join(process.cwd(), 'uploads', 'proposals', filename);
+
+    if (!existsSync(filePath)) {
+      throw new NotFoundException('Document file not found on server');
+    }
+
+    const ext = extname(proposal.documentOriginalName || filename).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.pdf':  'application/pdf',
+      '.doc':  'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xls':  'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.jpg':  'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png':  'image/png',
+    };
+
+    return {
+      filePath,
+      // downloadName is always the ref-based stored filename (e.g. REF12345.pdf).
+      // originalName is kept for display purposes only.
+      downloadName: filename,
+      originalName: proposal.documentOriginalName || filename,
+      mimeType: mimeTypes[ext] || 'application/octet-stream',
+    };
+  }
+
+  // ─── Ensure upload directory exists ───────────────────────────────────────
+  static ensureUploadDir() {
+    const dir = join(process.cwd(), 'uploads', 'proposals');
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   }
 }

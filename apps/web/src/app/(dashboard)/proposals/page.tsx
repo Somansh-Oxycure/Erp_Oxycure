@@ -4,16 +4,11 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { proposalsApi } from '@/lib/api';
-import { formatCurrency, formatDate, cn } from '@/lib/utils';
-import { FileText, Loader2, Search, AlertCircle } from 'lucide-react';
-
-const PROPOSAL_STATUS: Record<string, { label: string; color: string }> = {
-  draft:    { label: 'Draft',    color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
-  sent:     { label: 'Sent',     color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  accepted: { label: 'Accepted', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
-  expired:  { label: 'Expired',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' },
-};
+import { formatCurrency, formatDate, formatFollowUpDate, isOverdue } from '@/lib/utils';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { TableSkeleton } from '@/components/ui/TableSkeleton';
+import { ProposalStatsCards } from '@/components/proposals/proposal-stats-cards';
+import { FileText, Search } from 'lucide-react';
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -56,6 +51,11 @@ export default function ProposalsPage() {
         </div>
       </div>
 
+      {/* ── Stats ── */}
+      <div className="shrink-0 px-6 py-4 border-b border-border bg-background/50">
+        <ProposalStatsCards />
+      </div>
+
       {/* ── Filters ── */}
       <div className="shrink-0 flex items-center gap-3 px-6 py-3 border-b border-border bg-background/50">
         <div className="relative flex-1 max-w-xs">
@@ -81,13 +81,16 @@ export default function ProposalsPage() {
       {/* ── Table ── */}
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center h-48">
-            <Loader2 className="w-6 h-6 animate-spin text-sky-500" />
-          </div>
+          <TableSkeleton rows={10} cols={8} />
         ) : proposals.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <AlertCircle className="w-8 h-8 text-muted-foreground/40" />
-            <p className="text-sm text-muted-foreground">No proposals found</p>
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+              <FileText className="w-7 h-7 text-muted-foreground/40" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-foreground mb-1">No proposals found</p>
+              <p className="text-xs text-muted-foreground">Try adjusting your filters or create a proposal by converting a ticket.</p>
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -100,6 +103,7 @@ export default function ProposalsPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ticket</th>
                   <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Amount</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Follow-up</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Valid Until</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created</th>
                 </tr>
@@ -107,14 +111,13 @@ export default function ProposalsPage() {
               <tbody className="divide-y divide-border">
                 {proposals.map((p: {
                   id: string;
-                  proposalNumber: string;
                   status: string;
                   totalAmount: number;
                   validUntil?: string;
                   createdAt: string;
-                  ticket?: { ticketNumber: string; clientName: string; projectName?: string };
+                  nextFollowUpDate?: string | null;
+                  ticket?: { referenceId: string; clientName: string; projectName?: string };
                 }) => {
-                  const statusCfg = PROPOSAL_STATUS[p.status] || PROPOSAL_STATUS.draft;
                   return (
                     <tr
                       key={p.id}
@@ -123,7 +126,7 @@ export default function ProposalsPage() {
                     >
                       <td className="px-6 py-3.5">
                         <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-semibold text-foreground">
-                          {p.proposalNumber}
+                          {p.ticket?.referenceId || '—'}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 font-medium text-foreground">
@@ -134,15 +137,18 @@ export default function ProposalsPage() {
                       </td>
                       <td className="px-4 py-3.5">
                         {p.ticket && (
-                          <span className="font-mono text-xs text-sky-500">{p.ticket.ticketNumber}</span>
+                          <span className="font-mono text-xs text-sky-500">{p.ticket.referenceId}</span>
                         )}
                       </td>
                       <td className="px-4 py-3.5 text-right font-semibold text-emerald-500">
                         {formatCurrency(p.totalAmount)}
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={cn('px-2.5 py-1 rounded-full text-xs font-semibold', statusCfg.color)}>
-                          {statusCfg.label}
+                        <StatusBadge status={p.status} />
+                      </td>
+                      <td className="px-4 py-3.5 text-xs">
+                        <span className={p.nextFollowUpDate && isOverdue(p.nextFollowUpDate) ? 'text-red-500 font-medium' : 'text-muted-foreground'}>
+                          {formatFollowUpDate(p.nextFollowUpDate)}
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-muted-foreground text-xs">

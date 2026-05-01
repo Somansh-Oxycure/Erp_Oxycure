@@ -16,13 +16,12 @@ import {
 import { DesignSpecStatus, Prisma, UserRole } from '@prisma/client';
 
 const SPEC_INCLUDE = {
-  lead: {
+  ticket: {
     select: {
       id: true,
-      leadNumber: true,
-      firstName: true,
-      lastName: true,
-      companyName: true,
+      referenceId: true,
+      clientName: true,
+      name: true,
       phone: true,
       status: true,
       productType: true,
@@ -44,7 +43,7 @@ const SPEC_INCLUDE = {
     select: { id: true, firstName: true, lastName: true },
   },
   quotation: {
-    select: { id: true, quotationNumber: true, status: true, totalAmount: true },
+    select: { id: true, status: true, totalAmount: true },
   },
 };
 
@@ -54,14 +53,6 @@ export class DesignSpecsService {
     private prisma: PrismaService,
     private auditService: AuditService,
   ) {}
-
-  private async generateSpecNumber(): Promise<string> {
-    const year = new Date().getFullYear();
-    const count = await this.prisma.designSpecification.count({
-      where: { specNumber: { startsWith: `DSG-${year}-` } },
-    });
-    return `DSG-${year}-${String(count + 1).padStart(4, '0')}`;
-  }
 
   // ─── List ──────────────────────────────────────────────────────────────────
   async findAll(
@@ -137,11 +128,8 @@ export class DesignSpecsService {
     const ticket = await this.prisma.ticket.findUnique({ where: { id: dto.ticketId } });
     if (!ticket) throw new NotFoundException('Ticket not found');
 
-    const specNumber = await this.generateSpecNumber();
-
     const spec = await this.prisma.designSpecification.create({
       data: {
-        specNumber,
         ticketId: dto.ticketId,
         productType: dto.productType,
         requirementSummary: dto.requirementSummary,
@@ -281,14 +269,7 @@ export class DesignSpecsService {
       throw new BadRequestException('A quotation already exists for this design spec');
     }
 
-    // Generate quotation number
-    const year = new Date().getFullYear();
-    const qtCount = await this.prisma.quotation.count({
-      where: { quotationNumber: { startsWith: `QT-${year}-` } },
-    });
-    const quotationNumber = `QT-${year}-${String(qtCount + 1).padStart(4, '0')}`;
-
-    // Build line items from recommended products
+    // Build quotation from recommended products
     const recommendedProducts = (spec.recommendedProducts as any[]) || [];
     const items = recommendedProducts.map((p: any, idx: number) => ({
       productName: p.product_name || p.productName || 'Product',
@@ -312,7 +293,6 @@ export class DesignSpecsService {
     const quotation = await this.prisma.$transaction(async (tx) => {
       const qt = await tx.quotation.create({
         data: {
-          quotationNumber,
           customerId: dto.customerId,
           ticketId: spec.ticketId,
           validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,

@@ -31,7 +31,7 @@ export class CustomersService {
         where,
         include: {
           _count: { select: { orders: true } },
-          ticket: { select: { id: true, ticketNumber: true, status: true } },
+          ticket: { select: { id: true, referenceId: true, status: true } },
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
@@ -51,11 +51,8 @@ export class CustomersService {
     const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
-        ticket: { select: { id: true, ticketNumber: true, status: true } },
-        orders: {
-          select: {
+        ticket: { select: { id: true, referenceId: true, status: true } },        orders: {          select: {
             id: true,
-            orderNumber: true,
             status: true,
             totalAmount: true,
             createdAt: true,
@@ -65,7 +62,6 @@ export class CustomersService {
         quotations: {
           select: {
             id: true,
-            quotationNumber: true,
             status: true,
             totalAmount: true,
             createdAt: true,
@@ -121,12 +117,12 @@ export class CustomersService {
     const [orders, quotations, auditLogs] = await Promise.all([
       this.prisma.order.findMany({
         where: { customerId },
-        select: { id: true, orderNumber: true, status: true, totalAmount: true, createdAt: true },
+        select: { id: true, status: true, totalAmount: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.quotation.findMany({
         where: { customerId },
-        select: { id: true, quotationNumber: true, status: true, totalAmount: true, createdAt: true },
+        select: { id: true, status: true, totalAmount: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       }),
       this.prisma.auditLog.findMany({

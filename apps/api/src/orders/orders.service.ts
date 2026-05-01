@@ -27,14 +27,6 @@ export class CreateOrderDto {
 export class OrdersService {
   constructor(private prisma: PrismaService) {}
 
-  private async generateOrderNumber(): Promise<string> {
-    const year = new Date().getFullYear();
-    const count = await this.prisma.order.count({
-      where: { orderNumber: { startsWith: `ORD-${year}-` } },
-    });
-    return `ORD-${year}-${String(count + 1).padStart(4, '0')}`;
-  }
-
   async findAll(params: { customerId?: string; status?: OrderStatus; page?: number; limit?: number }) {
     const { customerId, status, page = 1, limit = 20 } = params;
     const where: Record<string, unknown> = {};
@@ -65,8 +57,8 @@ export class OrdersService {
       include: {
         customer: true,
         items: { orderBy: { sortOrder: 'asc' } },
-        quotation: { select: { id: true, quotationNumber: true } },
-        ticket: { select: { id: true, ticketNumber: true } },
+        quotation: { select: { id: true } },
+        ticket: { select: { id: true, referenceId: true } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
       },
     });
@@ -75,7 +67,6 @@ export class OrdersService {
   }
 
   async create(dto: CreateOrderDto, createdById: string) {
-    const orderNumber = await this.generateOrderNumber();
 
     const itemsData = dto.items.map((item, index) => ({
       productName: item.productName,
@@ -90,7 +81,6 @@ export class OrdersService {
 
     return this.prisma.order.create({
       data: {
-        orderNumber,
         customerId: dto.customerId,
         ticketId: dto.ticketId,
         quotationId: dto.quotationId,

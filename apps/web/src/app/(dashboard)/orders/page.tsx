@@ -52,11 +52,11 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {orders.map((o: { id: string; orderNumber: string; customer?: { companyName?: string; contactPerson: string }; status: string; totalAmount?: number; createdAt: string }) => {
+              {orders.map((o: { id: string; customer?: { companyName?: string; contactPerson: string }; status: string; totalAmount?: number; createdAt: string }) => {
                 const sc = ORDER_STATUS_CONFIG[o.status];
                 return (
                   <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-semibold text-slate-800">{o.orderNumber}</td>
+                    <td className="px-5 py-4 text-sm font-semibold text-slate-800">{o.id.slice(0, 8).toUpperCase()}</td>
                     <td className="px-5 py-4 text-sm text-slate-600">
                       {o.customer?.companyName || o.customer?.contactPerson || '—'}
                     </td>

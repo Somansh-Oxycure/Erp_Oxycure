@@ -14,27 +14,33 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
-  FileText,
   Send,
   CheckCircle2,
   XCircle,
   Clock,
+  Plus,
+  StickyNote,
+  FileText,
+  Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useRole } from '@/hooks/useRole';
 
-const PROPOSAL_STATUS: Record<string, { label: string; color: string; dot: string }> = {
-  draft:    { label: 'Draft',    color: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300', dot: 'bg-slate-400' },
-  sent:     { label: 'Sent',     color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300', dot: 'bg-blue-500' },
-  accepted: { label: 'Accepted', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300', dot: 'bg-emerald-500' },
-  rejected: { label: 'Rejected', color: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300', dot: 'bg-red-500' },
-  expired:  { label: 'Expired',  color: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', dot: 'bg-amber-500' },
-};
+/** Format a number as Indian Rupee with full locale format */
+function formatINR(amount: number | string | null | undefined): string {
+  if (amount === null || amount === undefined) return '\u2014';
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(num)) return '\u2014';
+  return num.toLocaleString('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 2 });
+}
 
 const VALID_TRANSITIONS: Record<string, { status: string; label: string; icon: React.ElementType; btnClass: string }[]> = {
+  // draft can only move to sent (backend enforces this)
   draft: [
-    { status: 'sent',    label: 'Mark as Sent',   icon: Send,         btnClass: 'bg-blue-600 hover:bg-blue-500 text-white' },
-    { status: 'expired', label: 'Mark as Expired', icon: Clock,        btnClass: 'bg-amber-600 hover:bg-amber-500 text-white' },
+    { status: 'sent', label: 'Mark as Sent', icon: Send, btnClass: 'bg-blue-600 hover:bg-blue-500 text-white' },
   ],
   sent: [
     { status: 'accepted', label: 'Mark Accepted', icon: CheckCircle2, btnClass: 'bg-emerald-600 hover:bg-emerald-500 text-white' },
@@ -43,12 +49,20 @@ const VALID_TRANSITIONS: Record<string, { status: string; label: string; icon: R
   ],
 };
 
+/** Statuses that require a ConfirmDialog before applying */
+const TERMINAL_STATUSES = new Set(['accepted', 'rejected']);
+
 export default function ProposalDetailPage() {
   const { id } = useParams() as { id: string };
   const router  = useRouter();
   const qc      = useQueryClient();
-  const [statusNotes, setStatusNotes] = useState('');
+  const role    = useRole();
+  const [statusNotes, setStatusNotes]   = useState('');
   const [pendingStatus, setPendingStatus] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen]   = useState(false);
+  const [followUpDate, setFollowUpDate] = useState('');
+  const [followUpOutcome, setFollowUpOutcome] = useState('');
+  const [noteInput, setNoteInput] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['proposal', id],
@@ -64,14 +78,47 @@ export default function ProposalDetailPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['proposal', id] });
       qc.invalidateQueries({ queryKey: ['proposals'] });
-      toast.success('Proposal status updated');
+      toast.success(`Proposal status updated`);
       setPendingStatus(null);
+      setConfirmOpen(false);
       setStatusNotes('');
     },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg || 'Failed to update status');
     },
+  });
+
+  const addFollowUpMutation = useMutation({
+    mutationFn: (scheduledAt: string) => proposalsApi.createFollowUp(id, { scheduledAt }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proposal', id] });
+      qc.invalidateQueries({ queryKey: ['proposal-stats'] });
+      setFollowUpDate('');
+      toast.success('Follow-up scheduled');
+    },
+    onError: () => toast.error('Failed to schedule follow-up'),
+  });
+
+  const addNoteMutation = useMutation({
+    mutationFn: (content: string) => proposalsApi.addNote(id, content),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proposal', id] });
+      setNoteInput('');
+      toast.success('Note added');
+    },
+    onError: () => toast.error('Failed to add note'),
+  });
+
+  const updateFollowUpMutation = useMutation({
+    mutationFn: ({ fid, data }: { fid: string; data: { status?: string; outcome?: string } }) =>
+      proposalsApi.updateFollowUp(id, fid, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['proposal', id] });
+      qc.invalidateQueries({ queryKey: ['proposal-stats'] });
+      toast.success('Follow-up updated');
+    },
+    onError: () => toast.error('Failed to update follow-up'),
   });
 
   if (isLoading) {
@@ -94,7 +141,6 @@ export default function ProposalDetailPage() {
     );
   }
 
-  const statusCfg = PROPOSAL_STATUS[proposal.status] || PROPOSAL_STATUS.draft;
   const transitions = VALID_TRANSITIONS[proposal.status] || [];
 
   return (
@@ -109,7 +155,7 @@ export default function ProposalDetailPage() {
           Proposals
         </button>
         <ChevronRight className="w-3.5 h-3.5" />
-        <span className="text-foreground font-medium">{proposal.proposalNumber}</span>
+        <span className="text-foreground font-medium">{proposal.ticket?.referenceId || proposal.id.slice(0, 8).toUpperCase()}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -125,12 +171,9 @@ export default function ProposalDetailPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                        {proposal.proposalNumber}
+                        {proposal.ticket?.referenceId || proposal.id.slice(0, 8).toUpperCase()}
                       </span>
-                      <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold', statusCfg.color)}>
-                        <span className={cn('w-1.5 h-1.5 rounded-full', statusCfg.dot)} />
-                        {statusCfg.label}
-                      </span>
+                      <StatusBadge status={proposal.status} />
                     </div>
                     <h1 className="text-xl font-bold text-foreground">
                       {proposal.ticket?.projectName || proposal.ticket?.clientName || 'Proposal'}
@@ -194,46 +237,123 @@ export default function ProposalDetailPage() {
 
                 {/* Totals summary */}
                 {proposal.items && proposal.items.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-border space-y-1.5 text-sm">
+                  <div className="mt-4 pt-4 border-t border-border space-y-1.5 text-sm font-mono">
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Subtotal</span>
-                      <span>{formatCurrency(proposal.subtotal)}</span>
+                      <span className="font-sans">Subtotal</span>
+                      <span>{formatINR(proposal.subtotal)}</span>
                     </div>
                     {Number(proposal.discountAmount) > 0 && (
                       <div className="flex justify-between text-red-500">
-                        <span>Discount</span>
-                        <span>−{formatCurrency(proposal.discountAmount)}</span>
+                        <span className="font-sans">Discount</span>
+                        <span>− {formatINR(proposal.discountAmount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-muted-foreground">
-                      <span>Tax</span>
-                      <span>{formatCurrency(proposal.taxAmount)}</span>
+                      <span className="font-sans">Tax</span>
+                      <span>+ {formatINR(proposal.taxAmount)}</span>
                     </div>
-                    <div className="flex justify-between font-bold text-foreground text-base pt-1 border-t border-border">
-                      <span>Total</span>
-                      <span className="text-emerald-500">{formatCurrency(proposal.totalAmount)}</span>
+                    <div className="flex justify-between font-bold text-foreground text-base pt-2 border-t border-border">
+                      <span className="font-sans">Total</span>
+                      <span className="text-emerald-500">{formatINR(proposal.totalAmount)}</span>
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* ── Notes & Terms ── */}
-              {(proposal.notes || proposal.termsAndConditions) && (
-                <div className="p-5 rounded-2xl bg-card border border-border space-y-4">
-                  {proposal.notes && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Notes</p>
-                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-muted/40 rounded-xl p-4">{proposal.notes}</p>
+              {/* ── Document ── */}
+              {proposal.documentUrl && (
+                <div className="p-5 rounded-2xl bg-card border border-border">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FileText className="w-4 h-4 text-sky-500" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Proposal Document</p>
+                  </div>
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-sky-500/5 border border-sky-500/20">
+                    <FileText className="w-5 h-5 text-sky-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">
+                        {proposal.documentOriginalName || 'Proposal Document'}
+                      </p>
                     </div>
-                  )}
-                  {proposal.termsAndConditions && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Terms &amp; Conditions</p>
-                      <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap bg-muted/40 rounded-xl p-4">{proposal.termsAndConditions}</p>
-                    </div>
-                  )}
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'}/proposals/${id}/document/view`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 text-xs font-medium transition-colors shrink-0"
+                      title="View document"
+                    >
+                      <FileText className="w-3.5 h-3.5" />
+                      View
+                    </a>
+                    <a
+                      href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'}/proposals/${id}/document/download`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 text-xs font-medium transition-colors shrink-0"
+                      title="Download document"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      Download
+                    </a>
+                  </div>
                 </div>
               )}
+
+              {/* ── Notes ── */}
+              <div className="p-5 rounded-2xl bg-card border border-border">
+                <div className="flex items-center gap-2 mb-4">
+                  <StickyNote className="w-4 h-4 text-amber-500" />
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Notes</p>
+                </div>
+
+                {(!proposal.notes || proposal.notes.length === 0) && (
+                  <p className="text-sm text-muted-foreground italic mb-4">No notes yet.</p>
+                )}
+
+                {proposal.notes && proposal.notes.length > 0 && (
+                  <div className="space-y-3 mb-4">
+                    {proposal.notes.map((note: { id: string; content: string; createdAt: string; createdBy?: { firstName: string; lastName: string } }) => (
+                      <div key={note.id} className="p-3 rounded-xl bg-muted/50 border border-border">
+                        <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Clock className="w-3 h-3" />
+                            {new Date(note.createdAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </span>
+                          {note.createdBy && (
+                            <span className="text-[11px] text-muted-foreground">
+                              &middot; {note.createdBy.firstName} {note.createdBy.lastName}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add note input */}
+                <div className="flex gap-2">
+                  <textarea
+                    value={noteInput}
+                    onChange={(e) => setNoteInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (noteInput.trim()) addNoteMutation.mutate(noteInput.trim());
+                      }
+                    }}
+                    placeholder="Add a note... (Enter to save)"
+                    rows={2}
+                    className="flex-1 px-3 py-2 bg-background border border-border rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                  />
+                  <button
+                    onClick={() => { if (noteInput.trim()) addNoteMutation.mutate(noteInput.trim()); }}
+                    disabled={!noteInput.trim() || addNoteMutation.isPending}
+                    className="px-3 self-start bg-amber-500 hover:bg-amber-400 text-white text-sm font-semibold rounded-lg disabled:opacity-40 transition-colors py-2"
+                  >
+                    {addNoteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* ══ RIGHT SIDEBAR ══ */}
@@ -247,7 +367,7 @@ export default function ProposalDetailPage() {
                     onClick={() => router.push(`/tickets/${proposal.ticket.id}`)}
                     className="w-full text-left p-3 rounded-xl bg-muted/40 hover:bg-muted/70 border border-border transition-colors"
                   >
-                    <p className="font-mono text-xs text-sky-500 font-semibold mb-1">{proposal.ticket.ticketNumber}</p>
+                    <p className="font-mono text-xs text-sky-500 font-semibold mb-1">{proposal.ticket.referenceId}</p>
                     <p className="text-sm font-medium text-foreground">{proposal.ticket.clientName}</p>
                     {proposal.ticket.projectName && (
                       <p className="text-xs text-muted-foreground mt-0.5">{proposal.ticket.projectName}</p>
@@ -289,7 +409,7 @@ export default function ProposalDetailPage() {
               </div>
 
               {/* ── Status Actions ── */}
-              {transitions.length > 0 && (
+              {transitions.length > 0 && role !== 'salesperson' && (
                 <div className="p-4 rounded-2xl bg-card border border-border">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Actions</p>
                   <div className="space-y-2">
@@ -298,9 +418,17 @@ export default function ProposalDetailPage() {
                       return (
                         <button
                           key={t.status}
-                          onClick={() => setPendingStatus(t.status)}
+                          onClick={() => {
+                            setPendingStatus(t.status);
+                            if (TERMINAL_STATUSES.has(t.status)) {
+                              setConfirmOpen(true);
+                            } else {
+                              statusMutation.mutate({ status: t.status, notes: statusNotes || undefined });
+                            }
+                          }}
+                          disabled={statusMutation.isPending}
                           className={cn(
-                            'w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors',
+                            'w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50',
                             t.btnClass,
                           )}
                         >
@@ -310,49 +438,122 @@ export default function ProposalDetailPage() {
                       );
                     })}
                   </div>
+
+                  {/* Notes field for non-terminal transitions */}
+                  {transitions.some((t) => !TERMINAL_STATUSES.has(t.status)) && (
+                    <textarea
+                      value={statusNotes}
+                      onChange={(e) => setStatusNotes(e.target.value)}
+                      placeholder="Optional notes..."
+                      rows={2}
+                      className="mt-3 w-full px-3 py-2 bg-background border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                    />
+                  )}
                 </div>
               )}
+            </div>
+
+            {/* ══ RIGHT SIDEBAR ══ */}
+            <div className="space-y-4">
+
+              {/* ── Follow-ups ── */}
+              <div className="p-4 rounded-2xl bg-card border border-border">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+                  Follow-ups ({proposal.followUps?.length || 0})
+                </p>
+                <div className="space-y-2">
+                  {proposal.followUps?.length === 0 && (
+                    <p className="text-sm text-muted-foreground italic">No follow-ups scheduled yet.</p>
+                  )}
+                  {proposal.followUps?.map((fu: { id: string; scheduledAt: string; outcome: string | null; status: string; createdBy?: { firstName: string; lastName: string } }) => {
+                    const done = fu.status === 'completed';
+                    const overdue = !done && new Date(fu.scheduledAt) < new Date();
+                    return (
+                      <div
+                        key={fu.id}
+                        className={cn(
+                          'p-3 rounded-xl border flex items-start gap-2.5',
+                          done    ? 'bg-emerald-500/5 border-emerald-500/20'
+                          : overdue ? 'bg-red-500/5 border-red-500/20'
+                          :           'bg-muted/40 border-border',
+                        )}
+                      >
+                        {done
+                          ? <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-500 shrink-0" />
+                          : <Clock className={cn('w-4 h-4 mt-0.5 shrink-0', overdue ? 'text-red-500' : 'text-muted-foreground')} />
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className={cn('text-sm font-semibold', done ? 'text-emerald-600' : overdue ? 'text-red-500' : 'text-foreground')}>
+                            {new Date(fu.scheduledAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                          </p>
+                          {fu.outcome && <p className="text-xs text-muted-foreground mt-0.5">{fu.outcome}</p>}
+                        </div>
+                        {!done && (
+                          <button
+                            onClick={() => updateFollowUpMutation.mutate({ fid: fu.id, data: { status: 'completed' } })}
+                            className="text-xs text-emerald-600 hover:text-emerald-500 font-semibold shrink-0"
+                          >
+                            Done
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Schedule new follow-up */}
+                <div className="mt-3 space-y-2">
+                  <input
+                    type="datetime-local"
+                    value={followUpDate}
+                    onChange={(e) => setFollowUpDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                  />
+                  <input
+                    placeholder="Outcome / notes (optional)"
+                    value={followUpOutcome}
+                    onChange={(e) => setFollowUpOutcome(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                  />
+                  <button
+                    onClick={() => {
+                      if (followUpDate) addFollowUpMutation.mutate(new Date(followUpDate).toISOString());
+                    }}
+                    disabled={!followUpDate || addFollowUpMutation.isPending}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Schedule Follow-up
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Status Confirm Modal ── */}
-      {pendingStatus && (
-        <>
-          <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={() => setPendingStatus(null)} />
-          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md bg-card rounded-2xl border border-border shadow-2xl p-6">
-            <h3 className="text-base font-bold text-foreground mb-1">
-              {VALID_TRANSITIONS[proposal.status]?.find((t) => t.status === pendingStatus)?.label}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Change proposal status to <strong>{PROPOSAL_STATUS[pendingStatus]?.label}</strong>?
-            </p>
-            <textarea
-              value={statusNotes}
-              onChange={(e) => setStatusNotes(e.target.value)}
-              placeholder="Optional notes..."
-              rows={2}
-              className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500/40 mb-4"
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setPendingStatus(null); setStatusNotes(''); }}
-                className="flex-1 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-accent"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => statusMutation.mutate({ status: pendingStatus, notes: statusNotes || undefined })}
-                disabled={statusMutation.isPending}
-                className="flex-1 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold disabled:opacity-50"
-              >
-                {statusMutation.isPending ? 'Updating...' : 'Confirm'}
-              </button>
-            </div>
-          </div>
-        </>
-      )}
+      {/* ── Confirm Dialog for terminal status changes ── */}
+      <ConfirmDialog
+        open={confirmOpen && !!pendingStatus}
+        title={pendingStatus === 'accepted' ? 'Accept Proposal?' : 'Reject Proposal?'}
+        description={
+          pendingStatus === 'accepted'
+            ? 'This will mark the proposal as Accepted and set the linked ticket to Won. This action cannot be undone.'
+            : 'This will mark the proposal as Rejected. This action cannot be undone.'
+        }
+        confirmLabel={pendingStatus === 'accepted' ? 'Accept' : 'Reject'}
+        variant="danger"
+        isPending={statusMutation.isPending}
+        onConfirm={() =>
+          statusMutation.mutate({ status: pendingStatus!, notes: statusNotes || undefined })
+        }
+        onCancel={() => {
+          setConfirmOpen(false);
+          setPendingStatus(null);
+          setStatusNotes('');
+        }}
+      />
     </div>
   );
 }

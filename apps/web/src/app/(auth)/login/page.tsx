@@ -1,20 +1,23 @@
 ﻿'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Wind, AlertCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Wind, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { toast } from 'sonner';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const { login } = useAuthStore();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const { login }    = useAuthStore();
+  const [email, setEmail]               = useState('');
+  const [password, setPassword]         = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [isLoading, setIsLoading]       = useState(false);
+  const [error, setError]               = useState('');
+
+  const sessionExpired = searchParams.get('reason') === 'session_expired';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,6 +130,14 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Session expired banner */}
+            {sessionExpired && (
+              <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-sky-50 border border-sky-200 text-sky-700 text-sm">
+                <Info className="w-4 h-4 shrink-0" />
+                <span>Your session expired. Please log in again.</span>
+              </div>
+            )}
+
             {/* Error */}
             {error && (
               <motion.div

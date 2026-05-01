@@ -21,8 +21,6 @@ import {
   AssignTicketDto,
   ConvertTicketDto,
   CreateTicketNoteDto,
-  CreateFollowUpDto,
-  UpdateFollowUpDto,
   TicketFilterDto,
 } from './dto/ticket.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -48,12 +46,6 @@ export class TicketsController {
   @ApiOperation({ summary: 'Get ticket statistics for dashboard' })
   getStats(@CurrentUser() user: RequestUser) {
     return this.ticketsService.getStats(user);
-  }
-
-  @Get('today-follow-ups')
-  @ApiOperation({ summary: "Get today's follow-ups" })
-  getTodayFollowUps(@CurrentUser() user: RequestUser) {
-    return this.ticketsService.getTodayFollowUps(user);
   }
 
   @Get('duplicates/:phone')
@@ -140,27 +132,6 @@ export class TicketsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.ticketsService.addNote(id, dto, user.id);
-  }
-
-  @Post(':id/follow-ups')
-  @ApiOperation({ summary: 'Schedule a follow-up for a ticket' })
-  createFollowUp(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CreateFollowUpDto,
-    @CurrentUser() user: RequestUser,
-  ) {
-    return this.ticketsService.createFollowUp(id, dto, user.id);
-  }
-
-  @Patch(':id/follow-ups/:fid')
-  @ApiOperation({ summary: 'Update follow-up status/outcome' })
-  updateFollowUp(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('fid', ParseUUIDPipe) fid: string,
-    @Body() dto: UpdateFollowUpDto,
-    @CurrentUser() user: RequestUser,
-  ) {
-    return this.ticketsService.updateFollowUp(id, fid, dto, user.id);
   }
 
   @Delete(':id')

@@ -1,17 +1,24 @@
 import {
   Controller,
   Get,
+  Post,
   Patch,
   Body,
   Param,
   Query,
   UseGuards,
   ParseUUIDPipe,
+  UploadedFile,
+  UseInterceptors,
+  BadRequestException,
+  Res,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagger';
+import { ProposalUploadInterceptor } from './proposal-upload.interceptor';
 import { UserRole } from '@prisma/client';
 import { ProposalsService } from './proposals.service';
-import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto } from './dto/proposal.dto';
+import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, CreateProposalFollowUpDto, UpdateProposalFollowUpDto, AddProposalNoteDto } from './dto/proposal.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -34,6 +41,12 @@ export class ProposalsController {
   @ApiOperation({ summary: 'Get proposal statistics' })
   getStats(@CurrentUser() user: RequestUser) {
     return this.proposalsService.getStats(user);
+  }
+
+  @Get('today-follow-ups')
+  @ApiOperation({ summary: "Get today's proposal follow-ups" })
+  getTodayFollowUps(@CurrentUser() user: RequestUser) {
+    return this.proposalsService.getTodayFollowUps(user);
   }
 
   @Get()
@@ -66,5 +79,78 @@ export class ProposalsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.proposalsService.updateStatus(id, dto, user);
+  }
+
+  @Post(':id/follow-ups')
+  @ApiOperation({ summary: 'Schedule a follow-up for a proposal' })
+  createFollowUp(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateProposalFollowUpDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.proposalsService.createFollowUp(id, dto, user.id);
+  }
+
+  @Patch(':id/follow-ups/:fid')
+  @ApiOperation({ summary: 'Update proposal follow-up status/outcome' })
+  updateFollowUp(
+    @Param('fid', ParseUUIDPipe) fid: string,
+    @Body() dto: UpdateProposalFollowUpDto,
+  ) {
+    return this.proposalsService.updateFollowUp(fid, dto);
+  }
+
+  @Post(':id/notes')
+  @ApiOperation({ summary: 'Add a timestamped note to a proposal' })
+  addNote(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddProposalNoteDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.proposalsService.addNote(id, dto, user.id);
+  }
+
+  @Get(':id/document/view')
+  @ApiOperation({ summary: 'View the proposal document inline in the browser' })
+  async viewDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const info = await this.proposalsService.getDocumentInfo(id);
+    const encodedName = encodeURIComponent(info.downloadName);
+    res.setHeader('Content-Type', info.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `inline; filename="${info.downloadName}"; filename*=UTF-8''${encodedName}`,
+    );
+    res.sendFile(info.filePath);
+  }
+
+  @Get(':id/document/download')
+  @ApiOperation({ summary: 'Download the proposal document as the reference-based filename' })
+  async downloadDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const info = await this.proposalsService.getDocumentInfo(id);
+    const encodedName = encodeURIComponent(info.downloadName);
+    res.setHeader('Content-Type', info.mimeType);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${info.downloadName}"; filename*=UTF-8''${encodedName}`,
+    );
+    res.sendFile(info.filePath);
+  }
+
+  @Post(':id/document')
+  @ApiOperation({ summary: 'Upload or replace the proposal document' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(ProposalUploadInterceptor)
+  uploadDocument(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file provided');
+    return this.proposalsService.uploadDocument(id, file);
   }
 }

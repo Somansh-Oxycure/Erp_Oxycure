@@ -13,7 +13,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Oxycure ERP',
   description: 'Enterprise Resource Planning — Lead to Revenue',
-  icons: { icon: '/favicon.ico' },
+  // icons: { icon: '/favicon.ico' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

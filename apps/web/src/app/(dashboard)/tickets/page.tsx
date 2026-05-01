@@ -52,11 +52,6 @@ const TICKET_STATUSES = [
   { value: '', label: 'All' },
   { value: 'new', label: 'New' },
   { value: 'contacted', label: 'Contacted' },
-  { value: 'site_inspection', label: 'Site Inspection' },
-  { value: 'design_review', label: 'Design Review' },
-  { value: 'quoted', label: 'Quoted' },
-  { value: 'won', label: 'Won' },
-  { value: 'lost', label: 'Lost' },
 ];
 
 function TicketsPageInner() {

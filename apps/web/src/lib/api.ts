@@ -66,10 +66,10 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (refreshError) {
         processQueue(refreshError, null);
-        // Redirect to login
+        // Redirect to login with session-expired reason
         if (typeof window !== 'undefined') {
           window.__accessToken = undefined;
-          window.location.href = '/login';
+          window.location.href = '/login?reason=session_expired';
         }
         return Promise.reject(refreshError);
       } finally {
@@ -101,7 +101,6 @@ export const authApi = {
 export const ticketsApi = {
   findAll: (params: Record<string, unknown>) => api.get('/tickets', { params }),
   stats: () => api.get('/tickets/stats'),
-  todayFollowUps: () => api.get('/tickets/today-follow-ups'),
   findOne: (id: string) => api.get(`/tickets/${id}`),
   aging: (id: string) => api.get(`/tickets/${id}/aging`),
   create: (data: unknown) => api.post('/tickets', data),
@@ -109,9 +108,6 @@ export const ticketsApi = {
   assign: (id: string, data: unknown) => api.patch(`/tickets/${id}/assign`, data),
   convert: (id: string, data: unknown) => api.post(`/tickets/${id}/convert`, data),
   addNote: (id: string, data: unknown) => api.post(`/tickets/${id}/notes`, data),
-  createFollowUp: (id: string, data: unknown) => api.post(`/tickets/${id}/follow-ups`, data),
-  updateFollowUp: (id: string, fid: string, data: unknown) =>
-    api.patch(`/tickets/${id}/follow-ups/${fid}`, data),
   checkDuplicate: (phone: string) => api.get(`/tickets/duplicates/${phone}`),
 };
 
@@ -167,10 +163,23 @@ export const designSpecsApi = {
 export const proposalsApi = {
   findAll: (params?: Record<string, unknown>) => api.get('/proposals', { params }),
   stats: () => api.get('/proposals/stats'),
+  todayFollowUps: () => api.get('/proposals/today-follow-ups'),
   findOne: (id: string) => api.get(`/proposals/${id}`),
   update: (id: string, data: unknown) => api.patch(`/proposals/${id}`, data),
   updateStatus: (id: string, status: string, notes?: string) =>
     api.patch(`/proposals/${id}/status`, { status, notes }),
+  createFollowUp: (id: string, data: unknown) => api.post(`/proposals/${id}/follow-ups`, data),
+  updateFollowUp: (id: string, fid: string, data: unknown) =>
+    api.patch(`/proposals/${id}/follow-ups/${fid}`, data),
+  addNote: (id: string, content: string) =>
+    api.post(`/proposals/${id}/notes`, { content }),
+  uploadDocument: (id: string, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post(`/proposals/${id}/document`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
 };
 
 export const opportunitiesApi = {

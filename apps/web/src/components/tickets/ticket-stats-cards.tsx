@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ticketsApi } from '@/lib/api';
 import { cn, formatCurrency } from '@/lib/utils';
-import { TrendingUp, Users, Clock, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { TrendingUp, Users, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface StatCardProps {
@@ -37,7 +37,7 @@ export function TicketStatsCards() {
     staleTime: 30_000,
   });
 
-  const stats = data?.data;
+  const stats = data?.data?.data;
   if (!stats) return null;
 
   const cards: StatCardProps[] = [
@@ -61,20 +61,6 @@ export function TicketStatsCards() {
       icon: CheckCircle2,
       color: 'text-emerald-600',
       bg: 'bg-emerald-500/10',
-    },
-    {
-      label: "Today's Follow-ups",
-      value: stats.todayFollowUps ?? 0,
-      icon: Clock,
-      color: 'text-amber-600',
-      bg: 'bg-amber-500/10',
-    },
-    {
-      label: 'Overdue Follow-ups',
-      value: stats.overdueFollowUps ?? 0,
-      icon: AlertCircle,
-      color: stats.overdueFollowUps > 0 ? 'text-red-600' : 'text-muted-foreground',
-      bg: stats.overdueFollowUps > 0 ? 'bg-red-500/10' : 'bg-muted',
     },
   ];
 

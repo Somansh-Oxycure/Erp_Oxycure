@@ -59,7 +59,7 @@ interface CreateTicketSheetProps {
 
 export function CreateTicketSheet({ open, onClose }: CreateTicketSheetProps) {
   const [step, setStep] = useState(0);
-  const [dupTicket, setDupTicket] = useState<null | { ticketNumber: string; clientName: string; status: string }>(null);
+  const [dupTicket, setDupTicket] = useState<null | { referenceId: string; clientName: string; status: string }>(null);
   const qc = useQueryClient();
 
   const { data: spResp } = useQuery({
@@ -219,7 +219,7 @@ export function CreateTicketSheet({ open, onClose }: CreateTicketSheetProps) {
                 <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                 <div className="text-xs text-amber-700 dark:text-amber-400">
                   <p className="font-semibold">Possible duplicate</p>
-                  <p className="mt-0.5">{dupTicket.clientName} — {dupTicket.ticketNumber} ({dupTicket.status})</p>
+                  <p className="mt-0.5">{dupTicket.clientName} — {dupTicket.referenceId} ({dupTicket.status})</p>
                 </div>
               </div>
             )}

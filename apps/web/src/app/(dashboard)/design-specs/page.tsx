@@ -125,7 +125,7 @@ export default function DesignSpecsPage() {
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <span className="text-xs font-mono text-sky-400">{spec.specNumber}</span>
+                      <span className="text-xs font-mono text-sky-400">{spec.ticket?.referenceId || spec.id.slice(0, 8).toUpperCase()}</span>
                       <p className="mt-1 text-sm font-medium text-foreground line-clamp-1">
                         {spec.title || spec.requirements?.substring(0, 60)}
                       </p>

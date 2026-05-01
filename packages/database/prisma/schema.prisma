@@ -152,12 +152,14 @@ model User {
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
   // Ticket relations
-  assignedTickets       Ticket[]              @relation("TicketAssignedTo")
-  createdTickets        Ticket[]              @relation("TicketCreatedBy")
-  convertedTickets      Ticket[]              @relation("TicketConvertedBy")
-  ticketNotes           TicketNote[]
-  ticketFollowUps       TicketFollowUp[]      @relation("TicketFollowUpCreatedBy")
-  ticketStatusHistories TicketStatusHistory[] @relation("StatusHistoryChangedBy")
+  assignedTickets         Ticket[]              @relation("TicketAssignedTo")
+  createdTickets          Ticket[]              @relation("TicketCreatedBy")
+  convertedTickets        Ticket[]              @relation("TicketConvertedBy")
+  ticketNotes             TicketNote[]
+  ticketFollowUps         TicketFollowUp[]      @relation("TicketFollowUpCreatedBy")
+  ticketStatusHistories   TicketStatusHistory[] @relation("StatusHistoryChangedBy")
+  proposalFollowUps       ProposalFollowUp[]    @relation("ProposalFollowUpCreatedBy")
+  proposalNotes           ProposalNote[]
 
   // Other relations
   designedSpecs         DesignSpecification[] @relation("DesignedSpecs")
@@ -220,9 +222,16 @@ model Customer {
   @@map("customers")
 }
 
+model ReferenceCounter {
+  id      String @id          // financial-year label, e.g. "26/27"
+  lastSeq Int    @default(0)
+
+  @@map("reference_counters")
+}
+
 model Ticket {
   id             String        @id @default(uuid())
-  ticketNumber   String        @unique @map("ticket_number")
+  referenceId    String        @unique @map("reference_id")
 
   // ── Contact / Client ──────────────────────────────
   clientName     String        @map("client_name")
@@ -328,7 +337,6 @@ model TicketFollowUp {
 
 model DesignSpecification {
   id                  String           @id @default(uuid())
-  specNumber          String           @unique @map("spec_number")
   ticketId            String           @map("ticket_id")
   customerId          String?          @map("customer_id")
   status              DesignSpecStatus @default(requested)
@@ -383,7 +391,6 @@ model DesignSpecification {
 
 model Quotation {
   id                 String          @id @default(uuid())
-  quotationNumber    String          @unique @map("quotation_number")
   ticketId           String?         @map("ticket_id")
   customerId         String          @map("customer_id")
   validUntil         DateTime?       @map("valid_until") @db.Date
@@ -413,7 +420,6 @@ model Quotation {
 
 model Proposal {
   id                 String         @id @default(uuid())
-  proposalNumber     String         @unique @map("proposal_number")
   ticketId           String         @map("ticket_id")
   status             ProposalStatus @default(draft)
   validUntil         DateTime?      @map("valid_until") @db.Date
@@ -421,19 +427,56 @@ model Proposal {
   taxAmount          Decimal        @default(0) @map("tax_amount") @db.Decimal(12, 2)
   discountAmount     Decimal        @default(0) @map("discount_amount") @db.Decimal(12, 2)
   totalAmount        Decimal        @default(0) @map("total_amount") @db.Decimal(12, 2)
-  termsAndConditions String?        @map("terms_and_conditions") @db.Text
-  notes              String?        @db.Text
-  createdById        String         @map("created_by")
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
+  documentUrl          String?        @map("document_url") @db.Text
+  documentOriginalName String?        @map("document_original_name")
+  termsAndConditions   String?        @map("terms_and_conditions") @db.Text
+  nextFollowUpDate     DateTime?      @map("next_follow_up_date") @db.Date
+  createdById          String         @map("created_by")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
 
-  ticket    Ticket         @relation(fields: [ticketId], references: [id])
-  createdBy User           @relation("CreatedProposals", fields: [createdById], references: [id])
+  ticket    Ticket               @relation(fields: [ticketId], references: [id])
+  createdBy User                 @relation("CreatedProposals", fields: [createdById], references: [id])
   items     ProposalItem[]
+  notes     ProposalNote[]
+  followUps ProposalFollowUp[]
 
   @@index([ticketId])
   @@index([status])
   @@map("proposals")
+}
+
+model ProposalNote {
+  id          String   @id @default(uuid())
+  proposalId  String   @map("proposal_id")
+  content     String   @db.Text
+  createdById String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  proposal  Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id])
+
+  @@index([proposalId])
+  @@map("proposal_notes")
+}
+
+model ProposalFollowUp {
+  id          String         @id @default(uuid())
+  proposalId  String         @map("proposal_id")
+  scheduledAt DateTime       @map("scheduled_at")
+  status      FollowUpStatus @default(pending)
+  outcome     String?        @db.Text
+  createdById String         @map("created_by")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+
+  proposal  Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("ProposalFollowUpCreatedBy", fields: [createdById], references: [id])
+
+  @@index([proposalId])
+  @@index([scheduledAt])
+  @@index([status])
+  @@map("proposal_follow_ups")
 }
 
 model ProposalItem {
@@ -476,7 +519,6 @@ model QuotationItem {
 
 model Order {
   id                   String      @id @default(uuid())
-  orderNumber          String      @unique @map("order_number")
   customerId           String      @map("customer_id")
   ticketId             String?     @map("ticket_id")
   quotationId          String?     @map("quotation_id")

@@ -13,7 +13,9 @@ import {
   ChevronRight,
   Phone,
   Timer,
+  Ticket as TicketIcon,
 } from 'lucide-react';
+import { TableSkeleton } from '@/components/ui/TableSkeleton';
 import {
   cn,
   formatCurrency,
@@ -29,7 +31,7 @@ import { useRouter } from 'next/navigation';
 
 export interface Ticket {
   id: string;
-  ticketNumber: string;
+  referenceId: string;
   clientName: string;
   name: string;
   phone: string;
@@ -192,7 +194,7 @@ export function TicketTable({
             <div className="min-w-0">
               <p className="text-sm font-semibold text-foreground truncate">{t.projectName || t.clientName}</p>
               <p className="text-xs text-muted-foreground truncate">{t.clientName}</p>
-              <p className="text-xs text-muted-foreground">{t.ticketNumber}</p>
+              <p className="text-xs text-muted-foreground">{t.referenceId}</p>
             </div>
           </div>
         );
@@ -241,11 +243,6 @@ export function TicketTable({
           {formatCurrency(getValue<number>())}
         </span>
       ),
-    },
-    {
-      id: 'followUp',
-      header: 'Follow-up',
-      cell: ({ row }) => <FollowUpCell date={row.original.nextFollowUpDate} />,
     },
     {
       id: 'aging',
@@ -298,16 +295,16 @@ export function TicketTable({
       {/* Table */}
       <div className="flex-1 overflow-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-8 h-8 rounded-full border-2 border-sky-500/30 border-t-sky-500 animate-spin" />
-              <p className="text-xs text-muted-foreground">Loading tickets…</p>
-            </div>
-          </div>
+          <TableSkeleton rows={10} cols={9} />
         ) : tickets.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 gap-3">
-            <p className="text-muted-foreground text-sm font-medium">No tickets found</p>
-            <p className="text-muted-foreground/60 text-xs">Try adjusting your filters</p>
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center">
+              <TicketIcon className="w-7 h-7 text-muted-foreground/40" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-foreground mb-1">No tickets found</p>
+              <p className="text-xs text-muted-foreground">Try adjusting your filters or create a new ticket.</p>
+            </div>
           </div>
         ) : (
           <table className="w-full text-sm">

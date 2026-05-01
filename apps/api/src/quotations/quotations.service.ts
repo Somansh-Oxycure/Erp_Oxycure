@@ -29,14 +29,6 @@ export class CreateQuotationDto {
 export class QuotationsService {
   constructor(private prisma: PrismaService) {}
 
-  private async generateQuotationNumber(): Promise<string> {
-    const year = new Date().getFullYear();
-    const count = await this.prisma.quotation.count({
-      where: { quotationNumber: { startsWith: `QT-${year}-` } },
-    });
-    return `QT-${year}-${String(count + 1).padStart(4, '0')}`;
-  }
-
   private calculateItemTotal(item: QuotationItemDto) {
     const base = item.quantity * item.unitPrice;
     const discountAmt = base * ((item.discountPercent || 0) / 100);
@@ -75,7 +67,7 @@ export class QuotationsService {
         customer: true,
         items: { orderBy: { sortOrder: 'asc' } },
         createdBy: { select: { id: true, firstName: true, lastName: true } },
-        ticket: { select: { id: true, ticketNumber: true } },
+        ticket: { select: { id: true, referenceId: true } },
       },
     });
     if (!q) throw new NotFoundException(`Quotation ${id} not found`);
@@ -83,7 +75,6 @@ export class QuotationsService {
   }
 
   async create(dto: CreateQuotationDto, createdById: string) {
-    const quotationNumber = await this.generateQuotationNumber();
 
     let subtotal = 0;
     let taxAmount = 0;
@@ -114,7 +105,6 @@ export class QuotationsService {
 
     return this.prisma.quotation.create({
       data: {
-        quotationNumber,
         customerId: dto.customerId,
         ticketId: dto.ticketId,
         validUntil: dto.validUntil ? new Date(dto.validUntil) : undefined,
