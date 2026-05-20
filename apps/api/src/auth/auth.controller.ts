@@ -61,6 +61,7 @@ export class AuthController {
       success: true,
       data: {
         accessToken,
+        refreshToken,
         user: {
           id: user.id,
           employeeId: user.employeeId,
@@ -91,7 +92,7 @@ export class AuthController {
     res.cookie('access_token', accessToken, COOKIE_OPTIONS);
     res.cookie('refresh_token', refreshToken, COOKIE_OPTIONS);
 
-    return { success: true, data: { accessToken } };
+    return { success: true, data: { accessToken, refreshToken } };
   }
 
   @Post('logout')

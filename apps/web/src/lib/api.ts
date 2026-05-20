@@ -1,6 +1,8 @@
 import axios from 'axios';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const ACCESS_TOKEN_KEY = 'oxycure-access-token';
+const REFRESH_TOKEN_KEY = 'oxycure-refresh-token';
 
 export const api = axios.create({
   baseURL: API_URL,
@@ -12,7 +14,10 @@ export const api = axios.create({
 // ─── Request interceptor — attach token from memory if present ────────────────
 api.interceptors.request.use((config) => {
   if (typeof window !== 'undefined') {
-    const token = window.__accessToken;
+    const token = window.__accessToken || localStorage.getItem(ACCESS_TOKEN_KEY) || undefined;
+    if (!window.__accessToken && token) {
+      window.__accessToken = token;
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -54,11 +59,19 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await api.post('/auth/refresh', {});
+        const refreshToken =
+          typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+
+        const response = await api.post('/auth/refresh', {
+          refreshToken: refreshToken || undefined,
+        });
         const newToken = response.data?.data?.accessToken;
+        const newRefreshToken = response.data?.data?.refreshToken;
 
         if (typeof window !== 'undefined') {
           window.__accessToken = newToken;
+          if (newToken) localStorage.setItem(ACCESS_TOKEN_KEY, newToken);
+          if (newRefreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, newRefreshToken);
         }
 
         processQueue(null, newToken);
@@ -69,6 +82,8 @@ api.interceptors.response.use(
         // Redirect to login with session-expired reason
         if (typeof window !== 'undefined') {
           window.__accessToken = undefined;
+          localStorage.removeItem(ACCESS_TOKEN_KEY);
+          localStorage.removeItem(REFRESH_TOKEN_KEY);
           window.location.href = '/login?reason=session_expired';
         }
         return Promise.reject(refreshError);
@@ -94,7 +109,11 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
   logout: () => api.post('/auth/logout'),
-  refresh: () => api.post('/auth/refresh', {}),
+  refresh: () => {
+    const refreshToken =
+      typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+    return api.post('/auth/refresh', { refreshToken: refreshToken || undefined });
+  },
   me: () => api.get('/auth/me'),
 };
 

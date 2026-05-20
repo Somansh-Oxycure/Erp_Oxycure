@@ -4,6 +4,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authApi } from '@/lib/api';
 
+const ACCESS_TOKEN_KEY = 'oxycure-access-token';
+const REFRESH_TOKEN_KEY = 'oxycure-refresh-token';
+
 export interface AuthUser {
   id: string;
   employeeId: string;
@@ -36,10 +39,12 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           const response = await authApi.login(email, password);
-          const { user, accessToken } = response.data.data;
+          const { user, accessToken, refreshToken } = response.data.data;
 
           if (typeof window !== 'undefined') {
             window.__accessToken = accessToken;
+            if (accessToken) localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+            if (refreshToken) localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
           }
 
           set({ user, isAuthenticated: true, isLoading: false });
@@ -58,6 +63,8 @@ export const useAuthStore = create<AuthStore>()(
 
         if (typeof window !== 'undefined') {
           window.__accessToken = undefined;
+          localStorage.removeItem(ACCESS_TOKEN_KEY);
+          localStorage.removeItem(REFRESH_TOKEN_KEY);
         }
 
         set({ user: null, isAuthenticated: false });
