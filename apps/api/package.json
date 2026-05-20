@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "node_modules/.bin/nest build || ./node_modules/.bin/nest build",
+    "build": "node_modules/.bin/nest build",
     "start": "node dist/main",
     "dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -32,11 +32,13 @@
     "pizzip": "^3.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "uuid": "^9.0.1"
-  },
-  "devDependencies": {
+    "uuid": "^9.0.1",
     "@nestjs/cli": "^10.3.2",
     "@nestjs/schematics": "^10.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
     "@nestjs/testing": "^10.3.8",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.7",
@@ -46,8 +48,6 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/uuid": "^9.0.8",
-    "prisma": "^5.14.0",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "prisma": "^5.14.0"
   }
 }
