@@ -28,11 +28,24 @@ async function bootstrap() {
   app.use(helmet());
   app.use(cookieParser());
 
+  const primaryFrontendUrl = configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
+  const extraFrontendUrls = (configService.get<string>('FRONTEND_URLS', '') || '')
+    .split(',')
+    .map((url) => url.trim())
+    .filter(Boolean);
+  const allowVercelPreviews =
+    configService.get<string>('ALLOW_VERCEL_PREVIEWS', 'true') === 'true';
+
+  const corsOrigins: Array<string | RegExp> = [primaryFrontendUrl, ...extraFrontendUrls];
+  if (allowVercelPreviews) {
+    corsOrigins.push(/^https:\/\/.*\.vercel\.app$/);
+  }
+
   app.enableCors({
-    origin: configService.get('FRONTEND_URL', 'http://localhost:3000'),
+    origin: corsOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
   });
 
   // ─── Global Prefix ─────────────────────────────────────────────────────────
