@@ -4,6 +4,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Request, Express } from 'express';
+import type { FileFilterCallback } from 'multer';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
@@ -54,23 +56,31 @@ export class SuppliersController {
   @Roles('admin', 'manager')
   @UseInterceptors(FileInterceptor('file', {
     storage: diskStorage({
-      destination: (_req, _file, cb) => {
+      destination: (
+        _req: Request,
+        _file: Express.Multer.File,
+        cb: (error: Error | null, destination: string) => void,
+      ) => {
         if (!existsSync(SUPPLIER_UPLOAD_DIR)) {
           mkdirSync(SUPPLIER_UPLOAD_DIR, { recursive: true });
         }
         cb(null, SUPPLIER_UPLOAD_DIR);
       },
-      filename: (req, file, cb) => {
-        const supplierId = (req as any).params?.id ?? 'unknown';
+      filename: (
+        req: Request,
+        file: Express.Multer.File,
+        cb: (error: Error | null, filename: string) => void,
+      ) => {
+        const supplierId = req.params?.id ?? 'unknown';
         const uniqueSuffix = Date.now();
         cb(null, `cheque-${supplierId}-${uniqueSuffix}${extname(file.originalname)}`);
       },
     }),
     limits: { fileSize: 5 * 1024 * 1024 },
-    fileFilter: (_req, file, cb) => {
+    fileFilter: (_req: Request, file: Express.Multer.File, cb: FileFilterCallback) => {
       const allowed = ['.jpg', '.jpeg', '.png', '.pdf'];
       if (!allowed.includes(extname(file.originalname).toLowerCase())) {
-        return cb(new BadRequestException('Only JPG, PNG, and PDF files are allowed'), false);
+        return cb(new Error('Only JPG, PNG, and PDF files are allowed'));
       }
       cb(null, true);
     },
