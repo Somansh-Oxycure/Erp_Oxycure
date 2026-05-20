@@ -1,0 +1,35 @@
+{
+  "cookies": [
+    {
+      "name": "access_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZTM0ZDk0Yi02NGE3LTRlYWItYTJmNC02ZDUwZDc5ZGVjNzYiLCJlbWFpbCI6ImFkbWluQG94eWN1cmUuY29tIiwicm9sZSI6ImFkbWluIiwiZGVwYXJ0bWVudCI6ImFkbWluIiwiaWF0IjoxNzc5MTc1MDI3LCJleHAiOjE3ODE3NjcwMjd9.25cRTYGIQG_1TMbWGSUKQ5wpiK3ZsrUrp6IWnARCYeU",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1781767027,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    },
+    {
+      "name": "refresh_token",
+      "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZTM0ZDk0Yi02NGE3LTRlYWItYTJmNC02ZDUwZDc5ZGVjNzYiLCJlbWFpbCI6ImFkbWluQG94eWN1cmUuY29tIiwicm9sZSI6ImFkbWluIiwiZGVwYXJ0bWVudCI6ImFkbWluIiwiaWF0IjoxNzc5MTc1MDI3LCJleHAiOjE3ODE3NjcwMjd9.1GIjx7x-ewenLPmazmqHM-LFGLrzRem_Gifoi0aMnGA",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1781767027,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "http://localhost:3000",
+      "localStorage": [
+        {
+          "name": "oxycure-auth",
+          "value": "{\"state\":{\"user\":{\"id\":\"ce34d94b-64a7-4eab-a2f4-6d50d79dec76\",\"employeeId\":\"EMP-001\",\"firstName\":\"Oxycure\",\"lastName\":\"Admin\",\"email\":\"admin@oxycure.com\",\"phone\":\"9999999999\",\"role\":\"admin\",\"department\":\"admin\",\"isActive\":true,\"lastLoginAt\":\"2026-05-19T07:17:07.530Z\",\"createdAt\":\"2026-05-12T08:19:38.772Z\"},\"isAuthenticated\":true},\"version\":0}"
+        }
+      ]
+    }
+  ]
+}

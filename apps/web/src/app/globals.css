@@ -161,6 +161,59 @@
   background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
 }
 
+/* ── Print styles ── */
+@media print {
+  @page {
+    margin: 12mm 15mm;
+    size: A4 portrait;
+  }
+
+  html, body {
+    background: white !important;
+    color: black !important;
+    width: 100% !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Kill ALL overflow clipping so nothing gets cut */
+  * {
+    overflow: visible !important;
+    max-width: 100% !important;
+    scrollbar-width: none !important;
+  }
+  *::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* The document card */
+  .print\:shadow-none {
+    box-shadow: none !important;
+    border: 1px solid #e2e8f0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 12mm !important;
+    margin: 0 !important;
+  }
+
+  /* Scale down table text so 8 columns fit on A4 */
+  table {
+    width: 100% !important;
+    font-size: 10px !important;
+    border-collapse: collapse !important;
+  }
+  th, td {
+    padding: 4px 6px !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  /* Page break helpers */
+  tr {
+    page-break-inside: avoid;
+  }
+}
+
 /* Smooth page transitions */
 .page-enter {
   animation: pageEnter 0.3s ease-out;

@@ -10,11 +10,16 @@ const PAGE_TITLES: Record<string, string> = {
   '/': 'Dashboard',
   '/tickets': 'Tickets',
   '/customers': 'Customers',
-  '/design-specs': 'Design Specs',
   '/quotations': 'Quotations',
   '/orders': 'Orders',
   '/users': 'Users',
   '/settings': 'Settings',
+  '/settings/boq-templates': 'BoQ Templates',
+  '/stock/suppliers': 'Suppliers',
+  '/stock/purchase-orders': 'Purchase Orders',
+  '/stock/alerts': 'Stock Alerts',
+  '/stock': 'Stock Overview',
+  '/catalog': 'Product Catalog',
 };
 
 export function TopBar() {

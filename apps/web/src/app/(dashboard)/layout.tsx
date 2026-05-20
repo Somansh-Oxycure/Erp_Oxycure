@@ -13,6 +13,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
 
   useEffect(() => {
+    // If already authenticated (e.g. state restored from localStorage),
+    // skip the immediate fetchMe to avoid burning a rotating refresh token.
+    // API calls made by individual pages will still handle 401s via the
+    // axios interceptor, which performs the token refresh when needed.
+    if (isAuthenticated) return;
+
     fetchMe().then(() => {
       if (!useAuthStore.getState().isAuthenticated) {
         router.replace('/login');
@@ -42,11 +48,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pl-20">
-        <TopBar />
-        <main className="flex-1 overflow-y-auto">
+    <div className="flex h-screen bg-background overflow-hidden print:block print:h-auto print:overflow-visible">
+      <div className="print:hidden">
+        <Sidebar />
+      </div>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden pl-20 print:pl-0 print:overflow-visible">
+        <div className="print:hidden">
+          <TopBar />
+        </div>
+        <main className="flex-1 overflow-y-auto print:overflow-visible">
           <AnimatePresence>
             <motion.div
               key={pathname}
@@ -54,7 +64,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
-              className="h-full"
+              className="h-full print:h-auto"
             >
               {children}
             </motion.div>

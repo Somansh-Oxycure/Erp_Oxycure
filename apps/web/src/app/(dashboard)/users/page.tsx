@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -39,14 +39,25 @@ const ALL_ROLES = [
   'finance',
 ];
 
+const ALL_DEPARTMENTS = [
+  'sales',
+  'operations',
+  'service',
+  'admin',
+  'finance',
+  'design',
+];
+
 function CreateUserModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
+    employeeId: '',
     firstName: '',
     lastName: '',
     email: '',
     password: '',
     role: 'salesperson',
+    department: 'sales',
     phone: '',
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -75,64 +86,74 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         initial={{ scale: 0.95, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
-        className="w-full max-w-md bg-[#1a1a2e] border border-white/10 rounded-2xl p-6"
+        className="w-full max-w-md bg-card border border-border rounded-2xl p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-base font-semibold text-white">Create User</h3>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 text-gray-400">
+          <h3 className="text-base font-semibold text-foreground">Create User</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Employee ID</label>
+            <input
+              value={form.employeeId}
+              onChange={(e) => set('employeeId', e.target.value)}
+              placeholder="e.g. EMP-006"
+              className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+            />
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">First Name</label>
+              <label className="text-xs text-muted-foreground mb-1 block">First Name</label>
               <input
                 value={form.firstName}
                 onChange={(e) => set('firstName', e.target.value)}
-                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-400 mb-1 block">Last Name</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Last Name</label>
               <input
                 value={form.lastName}
                 onChange={(e) => set('lastName', e.target.value)}
-                className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
               />
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Email</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Email</label>
             <input
               type="email"
               value={form.email}
               onChange={(e) => set('email', e.target.value)}
-              className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Phone</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Phone</label>
             <input
               value={form.phone}
               onChange={(e) => set('phone', e.target.value)}
-              className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Role</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Role</label>
             <select
               value={form.role}
               onChange={(e) => set('role', e.target.value)}
-              className="w-full px-3 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+              className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
             >
               {ALL_ROLES.map((r) => (
-                <option key={r} value={r} className="bg-[#1a1a2e]">
+                <option key={r} value={r} className="bg-card">
                   {r.replace('_', ' ')}
                 </option>
               ))}
@@ -140,19 +161,34 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
           </div>
 
           <div>
-            <label className="text-xs text-gray-400 mb-1 block">Password</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Department</label>
+            <select
+              value={form.department}
+              onChange={(e) => set('department', e.target.value)}
+              className="w-full px-3 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+            >
+              {ALL_DEPARTMENTS.map((d) => (
+                <option key={d} value={d} className="bg-card">
+                  {d.charAt(0).toUpperCase() + d.slice(1)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Password</label>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={form.password}
                 onChange={(e) => set('password', e.target.value)}
-                placeholder="Min 8 characters"
-                className="w-full px-3 py-2.5 pr-10 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50"
+                placeholder="Min 8 chars, upper, lower, number, symbol"
+                className="w-full px-3 py-2.5 pr-10 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -163,16 +199,16 @@ function CreateUserModal({ onClose }: { onClose: () => void }) {
         <div className="flex gap-3 mt-5 justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm text-gray-400 hover:text-white transition-colors"
+            className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={() => mutation.mutate()}
             disabled={
-              !form.firstName || !form.email || !form.password || mutation.isPending
+              !form.employeeId || !form.firstName || !form.email || !form.password || mutation.isPending
             }
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-sm text-white font-medium disabled:opacity-40 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-sm text-foreground font-medium disabled:opacity-40 transition-colors"
           >
             {mutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             Create
@@ -215,13 +251,13 @@ export default function UsersPage() {
             <Users className="w-5 h-5 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">Users</h1>
-            <p className="text-sm text-gray-400">{users.length} team members</p>
+            <h1 className="text-xl font-semibold text-foreground">Users</h1>
+            <p className="text-sm text-muted-foreground">{users.length} team members</p>
           </div>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium transition-colors"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-foreground text-sm font-medium transition-colors"
         >
           <Plus className="w-4 h-4" />
           Add User
@@ -230,35 +266,35 @@ export default function UsersPage() {
 
       {/* Search */}
       <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or email..."
-          className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50"
+          className="w-full pl-10 pr-4 py-2.5 bg-muted/30 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-500/50"
         />
       </div>
 
       {/* Users Table */}
-      <div className="rounded-2xl bg-white/5 ring-1 ring-white/10 overflow-hidden">
+      <div className="rounded-2xl bg-muted/30 ring-1 ring-border overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <Loader2 className="w-5 h-5 text-sky-400 animate-spin" />
           </div>
         ) : users.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
             <Users className="w-10 h-10 opacity-30 mb-3" />
             <p>No users found</p>
           </div>
         ) : (
           <table className="w-full">
             <thead>
-              <tr className="border-b border-white/5">
-                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">User</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Role</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Phone</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Joined</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-4 py-3">Status</th>
+              <tr className="border-b border-border/50">
+                <th className="text-left text-xs font-medium text-muted-foreground px-5 py-3">User</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Role</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Phone</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Joined</th>
+                <th className="text-left text-xs font-medium text-muted-foreground px-4 py-3">Status</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -274,36 +310,36 @@ export default function UsersPage() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.03 }}
-                    className="border-b border-white/5 last:border-0 hover:bg-white/3"
+                    className="border-b border-border/50 last:border-0 hover:bg-muted/20"
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-foreground"
                           style={{ background: color }}
                         >
                           {initials}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-white">
+                          <p className="text-sm font-medium text-foreground">
                             {u.firstName} {u.lastName}
                             {isSelf && (
                               <span className="ml-2 text-xs text-sky-400">(you)</span>
                             )}
                           </p>
-                          <p className="text-xs text-gray-400">{u.email}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
                         </div>
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_BADGE[u.role] ?? 'bg-gray-500/10 text-gray-400'}`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_BADGE[u.role] ?? 'bg-gray-500/10 text-muted-foreground'}`}>
                         {u.role.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-400">{u.phone || '—'}</td>
-                    <td className="px-4 py-4 text-sm text-gray-400">{formatDate(u.createdAt)}</td>
+                    <td className="px-4 py-4 text-sm text-muted-foreground">{u.phone || '�'}</td>
+                    <td className="px-4 py-4 text-sm text-muted-foreground">{formatDate(u.createdAt)}</td>
                     <td className="px-4 py-4">
-                      <span className={`flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-xs ${u.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-gray-500'}`}>
+                      <span className={`flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-xs ${u.isActive ? 'bg-emerald-500/10 text-emerald-400' : 'bg-gray-500/10 text-muted-foreground'}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${u.isActive ? 'bg-emerald-400' : 'bg-gray-500'}`} />
                         {u.isActive ? 'Active' : 'Inactive'}
                       </span>
@@ -315,8 +351,8 @@ export default function UsersPage() {
                           disabled={toggleMutation.isPending}
                           className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs transition-colors disabled:opacity-40 ${
                             u.isActive
-                              ? 'hover:bg-red-500/10 text-gray-400 hover:text-red-400'
-                              : 'hover:bg-emerald-500/10 text-gray-400 hover:text-emerald-400'
+                              ? 'hover:bg-red-500/10 text-muted-foreground hover:text-red-400'
+                              : 'hover:bg-emerald-500/10 text-muted-foreground hover:text-emerald-400'
                           }`}
                         >
                           {u.isActive ? (

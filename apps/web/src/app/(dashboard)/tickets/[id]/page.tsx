@@ -672,7 +672,6 @@ export default function TicketFullViewPage() {
                   <LinkedDoc label="Proposals"    count={ticket.proposals?.length || 0} />
                   <LinkedDoc label="Quotations"   count={ticket.quotations?.length || 0} />
                   <LinkedDoc label="Orders"       count={ticket.orders?.length || 0} />
-                  <LinkedDoc label="Design Specs" count={ticket.designSpecs?.length || 0} />
                 </div>
               </div>
 

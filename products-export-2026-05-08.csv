@@ -1,0 +1,3 @@
+productCode,name,brand,categoryName,subCategory,unitOfMeasure,description,status,tags,specifications
+DEAC,4321,fwafc,HVAC Equipment,wfcacw,pcs,fcfwacacfwafcafcfac,draft,cwacf;fcwaf,"[{""specKey"":""size"",""specValue"":""34ZX467X47"",""specUnit"":""mm"",""sortOrder"":0}]"
+AEAC - 25,1234,fwafc,HVAC Equipment,wfcacw,pcs,fcfwacacfwafcafcfac,active,cwacf;fcwaf,"[{""specKey"":""fcwaffcfcw"",""specValue"":""34"",""specUnit"":""mm"",""sortOrder"":0}]"

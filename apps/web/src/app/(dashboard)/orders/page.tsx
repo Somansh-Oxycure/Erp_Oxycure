@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useQuery } from '@tanstack/react-query';
 import { ordersApi } from '@/lib/api';
@@ -26,11 +26,11 @@ export default function OrdersPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
-        <p className="text-slate-500 text-sm mt-0.5">Track all active and completed orders</p>
+        <h1 className="text-2xl font-bold text-foreground">Orders</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">Track all active and completed orders</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
         {isLoading ? (
           <div className="p-8 text-center">
             <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin mx-auto" />
@@ -38,11 +38,11 @@ export default function OrdersPage() {
         ) : orders.length === 0 ? (
           <div className="py-16 text-center">
             <ShoppingBag className="w-10 h-10 text-slate-200 mx-auto mb-3" />
-            <p className="text-slate-500 font-medium">No orders yet</p>
+            <p className="text-muted-foreground font-medium">No orders yet</p>
           </div>
         ) : (
           <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-100">
+            <thead className="bg-muted/40 border-b border-border/60">
               <tr>
                 {['Order #', 'Customer', 'Status', 'Total', 'Date'].map((h) => (
                   <th key={h} className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -51,14 +51,14 @@ export default function OrdersPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-border/40">
               {orders.map((o: { id: string; customer?: { companyName?: string; contactPerson: string }; status: string; totalAmount?: number; createdAt: string }) => {
                 const sc = ORDER_STATUS_CONFIG[o.status];
                 return (
-                  <tr key={o.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-4 text-sm font-semibold text-slate-800">{o.id.slice(0, 8).toUpperCase()}</td>
-                    <td className="px-5 py-4 text-sm text-slate-600">
-                      {o.customer?.companyName || o.customer?.contactPerson || '—'}
+                  <tr key={o.id} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-5 py-4 text-sm font-semibold text-foreground">{o.id.slice(0, 8).toUpperCase()}</td>
+                    <td className="px-5 py-4 text-sm text-foreground/70">
+                      {o.customer?.companyName || o.customer?.contactPerson || '�'}
                     </td>
                     <td className="px-5 py-4">
                       {sc && (
@@ -67,10 +67,10 @@ export default function OrdersPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-4 text-sm font-semibold text-slate-900">
+                    <td className="px-5 py-4 text-sm font-semibold text-foreground">
                       {formatCurrency(o.totalAmount)}
                     </td>
-                    <td className="px-5 py-4 text-sm text-slate-500">{formatDate(o.createdAt)}</td>
+                    <td className="px-5 py-4 text-sm text-muted-foreground">{formatDate(o.createdAt)}</td>
                   </tr>
                 );
               })}

@@ -13,7 +13,7 @@ import {
   Clock,
   MessageSquare,
   CalendarPlus,
-  TrendingRight,
+  TrendingUp,
   Loader2,
   ChevronRight,
   ArrowRight,

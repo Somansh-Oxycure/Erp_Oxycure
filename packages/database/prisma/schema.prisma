@@ -97,14 +97,6 @@ enum CustomerType {
   other
 }
 
-enum DesignSpecStatus {
-  requested
-  in_progress
-  completed
-  approved
-  revision_needed
-}
-
 enum QuotationStatus {
   draft
   sent
@@ -119,6 +111,72 @@ enum ProposalStatus {
   accepted
   rejected
   expired
+}
+
+enum BoQStatus {
+  draft
+  final
+  archived
+}
+
+enum ProductStatus {
+  active
+  discontinued
+  draft
+}
+
+enum UnitOfMeasure {
+  pcs
+  kg
+  ltr
+  mtr
+  set
+  box
+  roll
+}
+
+enum StockTxnType {
+  opening
+  grn
+  adjustment_in
+  adjustment_out
+}
+
+enum TransferType {
+  TRANSFER_OUT
+  TRANSFER_IN
+}
+
+enum TransferStatus {
+  DRAFT
+  CONFIRMED
+  CANCELLED
+}
+
+enum PurchaseOrderStatus {
+  draft
+  sent
+  partially_received
+  received
+  cancelled
+}
+
+enum SupplierStatus {
+  active
+  inactive
+}
+
+enum AlertRuleType {
+  low_stock
+  reorder
+  expiry
+  overstock
+}
+
+enum AlertStatus {
+  open
+  acknowledged
+  resolved
 }
 
 enum OrderStatus {
@@ -162,16 +220,23 @@ model User {
   proposalNotes           ProposalNote[]
 
   // Other relations
-  designedSpecs         DesignSpecification[] @relation("DesignedSpecs")
-  reviewedSpecs         DesignSpecification[] @relation("ReviewedSpecs")
-  siteInspections       DesignSpecification[] @relation("SiteInspections")
-  createdSpecs          DesignSpecification[] @relation("CreatedSpecs")
   createdQuotations     Quotation[]
   createdOrders         Order[]
   createdCustomers      Customer[]
   createdProposals      Proposal[]            @relation("CreatedProposals")
+  preparedBoQs          BoQ[]
   refreshTokens         RefreshToken[]
   auditLogs             AuditLog[]
+
+  // Phase 2 — Stock
+  performedTransactions StockTransaction[] @relation("PerformedTransactions")
+  createdPOs            PurchaseOrder[]    @relation("POCreatedBy")
+  resolvedAlerts        AlertLog[]         @relation("AlertResolvedBy")
+
+  // Stock Transfers
+  createdTransfers      StockTransfer[]    @relation("TransferCreatedBy")
+  confirmedTransfers    StockTransfer[]    @relation("TransferConfirmedBy")
+  cancelledTransfers    StockTransfer[]    @relation("TransferCancelledBy")
 
   @@map("users")
 }
@@ -216,7 +281,6 @@ model Customer {
   createdBy      User                  @relation(fields: [createdById], references: [id])
   orders         Order[]
   quotations     Quotation[]
-  designSpecs    DesignSpecification[]
 
   @@index([phone])
   @@map("customers")
@@ -287,7 +351,6 @@ model Ticket {
   statusHistory  TicketStatusHistory[]
   quotations     Quotation[]
   orders         Order[]
-  designSpecs    DesignSpecification[]
   proposals      Proposal[]
 
   createdAt      DateTime      @default(now()) @map("created_at")
@@ -335,60 +398,6 @@ model TicketFollowUp {
   @@map("ticket_follow_ups")
 }
 
-model DesignSpecification {
-  id                  String           @id @default(uuid())
-  ticketId            String           @map("ticket_id")
-  customerId          String?          @map("customer_id")
-  status              DesignSpecStatus @default(requested)
-
-  // Requirement Input
-  productType         ProductType      @map("product_type")
-  requirementSummary  String?          @map("requirement_summary") @db.Text
-  siteAreaSqft        Decimal?         @map("site_area_sqft") @db.Decimal(10, 2)
-  siteType            String?          @map("site_type")
-  siteEnvironment     String?          @map("site_environment") @db.Text
-  powerAvailability   String?          @map("power_availability")
-  specialRequirements String?          @map("special_requirements") @db.Text
-
-  // Site Inspection
-  siteInspectionDone  Boolean          @default(false) @map("site_inspection_done")
-  siteInspectionDate  DateTime?        @map("site_inspection_date") @db.Date
-  siteInspectionById  String?          @map("site_inspection_by")
-  siteInspectionNotes String?          @map("site_inspection_notes") @db.Text
-  sitePhotosUrl       String?          @map("site_photos_url")
-
-  // Design Output
-  recommendedProducts Json?            @map("recommended_products")
-  configurationNotes  String?          @map("configuration_notes") @db.Text
-  technicalSpecs      String?          @map("technical_specs") @db.Text
-  bomItems            Json?            @map("bom_items")
-  estimatedCost       Decimal?         @map("estimated_cost") @db.Decimal(12, 2)
-
-  // Approval
-  designedById        String?          @map("designed_by")
-  reviewedById        String?          @map("reviewed_by")
-  approvedAt          DateTime?        @map("approved_at")
-  revisionNotes       String?          @map("revision_notes") @db.Text
-  quotationId         String?          @map("quotation_id")
-
-  createdById         String           @map("created_by")
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
-
-  // Relations
-  ticket           Ticket     @relation(fields: [ticketId], references: [id])
-  customer         Customer?  @relation(fields: [customerId], references: [id])
-  designedBy       User?      @relation("DesignedSpecs", fields: [designedById], references: [id])
-  reviewedBy       User?      @relation("ReviewedSpecs", fields: [reviewedById], references: [id])
-  siteInspectionBy User?      @relation("SiteInspections", fields: [siteInspectionById], references: [id])
-  createdBy        User       @relation("CreatedSpecs", fields: [createdById], references: [id])
-  quotation        Quotation? @relation(fields: [quotationId], references: [id])
-
-  @@index([ticketId])
-  @@index([status])
-  @@map("design_specifications")
-}
-
 model Quotation {
   id                 String          @id @default(uuid())
   ticketId           String?         @map("ticket_id")
@@ -411,7 +420,6 @@ model Quotation {
   createdBy    User                  @relation(fields: [createdById], references: [id])
   items        QuotationItem[]
   orders       Order[]
-  designSpecs  DesignSpecification[]
 
   @@index([customerId])
   @@index([status])
@@ -431,6 +439,7 @@ model Proposal {
   documentOriginalName String?        @map("document_original_name")
   termsAndConditions   String?        @map("terms_and_conditions") @db.Text
   nextFollowUpDate     DateTime?      @map("next_follow_up_date") @db.Date
+  generateFormData     Json?          @map("generate_form_data")
   createdById          String         @map("created_by")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
@@ -440,6 +449,7 @@ model Proposal {
   items     ProposalItem[]
   notes     ProposalNote[]
   followUps ProposalFollowUp[]
+  boq       BoQ?
 
   @@index([ticketId])
   @@index([status])
@@ -496,6 +506,19 @@ model ProposalItem {
 
   @@index([proposalId])
   @@map("proposal_items")
+}
+
+model Unit {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?  @db.Text
+  price       Decimal? @db.Decimal(12, 2)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("units")
 }
 
 model QuotationItem {
@@ -592,4 +615,421 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================
+// BOQ MODULE
+// ============================================
+
+model BoQTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  components BoQTemplateComponent[]
+  products   BoQProduct[]
+
+  @@index([isActive])
+  @@map("boq_templates")
+}
+
+model BoQTemplateComponent {
+  id          String  @id @default(uuid())
+  templateId  String  @map("template_id")
+  name        String
+  description String? @db.Text
+  unit        String? @map("unit")
+  size        String? @map("size")
+  defaultQty      Decimal  @default(1) @map("default_qty") @db.Decimal(12, 3)
+  defaultUnitRate Decimal? @default(0) @map("default_unit_rate") @db.Decimal(12, 2)
+  sortOrder   Int     @default(0) @map("sort_order")
+  isOptional  Boolean @default(false) @map("is_optional")
+
+  template  BoQTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  boqItems  BoQItem[]
+
+  @@index([templateId])
+  @@map("boq_template_components")
+}
+
+model BoQ {
+  id            String    @id @default(uuid())
+  boqNumber     String    @unique @map("boq_number")
+  proposalId    String    @unique @map("proposal_id")
+  status        BoQStatus @default(draft)
+  notes         String?   @db.Text
+  customColumns Json?     @map("custom_columns")
+  preparedById  String    @map("prepared_by")
+  totalAmount   Decimal   @default(0) @map("total_amount") @db.Decimal(12, 2)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  proposal   Proposal     @relation(fields: [proposalId], references: [id])
+  products   BoQProduct[]
+  preparedBy User         @relation(fields: [preparedById], references: [id])
+
+  @@index([proposalId])
+  @@index([status])
+  @@map("boqs")
+}
+
+model BoQProduct {
+  id           String   @id @default(uuid())
+  boqId        String   @map("boq_id")
+  templateId   String?  @map("template_id")
+  name         String
+  description  String?  @db.Text
+  sortOrder    Int      @default(0) @map("sort_order")
+  priceMode    String   @default("component") @map("price_mode")
+  fixedPrice   Decimal? @map("fixed_price") @db.Decimal(12, 2)
+  subtotal     Decimal  @default(0) @db.Decimal(12, 2)
+  customValues Json?    @map("custom_values")
+  charges      Json?    @map("charges")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  boq      BoQ          @relation(fields: [boqId], references: [id], onDelete: Cascade)
+  template BoQTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  items    BoQItem[]
+
+  @@index([boqId])
+  @@map("boq_products")
+}
+
+model BoQItem {
+  id                  String   @id @default(uuid())
+  boqProductId        String   @map("boq_product_id")
+  templateComponentId String?  @map("template_component_id")
+  name                String
+  description         String?  @db.Text
+  unit                String?  @map("unit")
+  size                String?  @map("size")
+  quantity            Decimal  @db.Decimal(12, 3)
+  unitRate            Decimal  @default(0) @map("unit_rate") @db.Decimal(12, 2)
+  totalPrice          Decimal  @default(0) @map("total_price") @db.Decimal(12, 2)
+  remarks             String?  @db.Text
+  sortOrder           Int      @default(0) @map("sort_order")
+  isOptional          Boolean  @default(false) @map("is_optional")
+  isIncluded          Boolean  @default(true) @map("is_included")
+
+  product           BoQProduct            @relation(fields: [boqProductId], references: [id], onDelete: Cascade)
+  templateComponent BoQTemplateComponent? @relation(fields: [templateComponentId], references: [id])
+
+  @@index([boqProductId])
+  @@map("boq_items")
+}
+
+// ============================================
+// PRODUCT CATALOG MODULE
+// ============================================
+
+model ProductCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  parentId    String?  @map("parent_id")
+  description String?  @db.Text
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children ProductCategory[] @relation("CategoryTree")
+  products Product[]
+  alertRules AlertRule[]
+
+  @@index([parentId])
+  @@map("product_categories")
+}
+
+model Product {
+  id            String        @id @default(uuid())
+  productCode   String        @unique @map("product_code")
+  name          String
+  brand         String?
+  categoryName  String?       @map("category_name")
+  categoryId    String?       @map("category_id")
+  subCategory   String?       @map("sub_category")
+  unitOfMeasure UnitOfMeasure @default(pcs) @map("unit_of_measure")
+  description   String?       @db.Text
+  imageUrl      String?       @map("image_url") @db.Text
+  location      String?       @map("location")
+  status        ProductStatus @default(active)
+  tags          String[]      @default([])
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  category            ProductCategory?      @relation(fields: [categoryId], references: [id])
+  specifications      ProductSpecification[]
+  stockLevel          StockLevel?
+  stockTransactions   StockTransaction[]
+  productSuppliers    ProductSupplier[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  alertRules          AlertRule[]
+  alertLogs           AlertLog[]
+  stockTransferItems  StockTransferItem[]
+
+  @@index([status])
+  @@index([categoryId])
+  @@index([brand])
+  @@map("products")
+}
+
+model ProductSpecification {
+  id         String   @id @default(uuid())
+  productId  String   @map("product_id")
+  specKey    String   @map("spec_key")
+  specValue  String   @map("spec_value") @db.Text
+  specUnit   String?  @map("spec_unit")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("product_specifications")
+}
+
+// ============================================
+// STOCK MODULE (Phase 2)
+// ============================================
+
+model StockLevel {
+  id            String   @id @default(uuid())
+  productId     String   @unique @map("product_id")
+  qtyOnHand     Decimal  @default(0) @map("qty_on_hand") @db.Decimal(10, 2)
+  qtyOnOrder    Decimal  @default(0) @map("qty_on_order") @db.Decimal(10, 2)
+  avgCost       Decimal? @map("avg_cost") @db.Decimal(10, 2)
+  lastUpdatedAt DateTime @default(now()) @map("last_updated_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("stock_levels")
+}
+
+model StockTransaction {
+  id            String       @id @default(uuid())
+  productId     String       @map("product_id")
+  txnType       StockTxnType @map("txn_type")
+  qty           Decimal      @db.Decimal(10, 2)
+  direction     String       @map("direction") // '+' or '-'
+  unitCost      Decimal?     @map("unit_cost") @db.Decimal(10, 2)
+  referenceId   String?      @map("reference_id")
+  notes         String?      @db.Text
+  performedById String       @map("performed_by")
+  txnAt         DateTime     @default(now()) @map("txn_at")
+
+  product     Product @relation(fields: [productId], references: [id])
+  performedBy User    @relation("PerformedTransactions", fields: [performedById], references: [id])
+
+  @@index([productId])
+  @@index([txnType])
+  @@index([txnAt])
+  @@map("stock_transactions")
+}
+
+model Supplier {
+  id                   String         @id @default(uuid())
+  name                 String
+  contactName          String?        @map("contact_name")
+  phone                String?
+  email                String?
+  address              String?        @db.Text
+  gstin                String?
+  pan                  String?        @map("pan")
+  bankName             String?        @map("bank_name")
+  bankAccountNumber    String?        @map("bank_account_number")
+  bankIfscCode         String?        @map("bank_ifsc_code")
+  bankBranch           String?        @map("bank_branch")
+  cancelledChequeUrl   String?        @map("cancelled_cheque_url")
+  leadTimeDays         Int            @default(3) @map("lead_time_days")
+  notes                String?        @db.Text
+  status               SupplierStatus @default(active)
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  productSuppliers ProductSupplier[]
+  purchaseOrders   PurchaseOrder[]
+
+  @@index([status])
+  @@map("suppliers")
+}
+
+model ProductSupplier {
+  id          String   @id @default(uuid())
+  productId   String   @map("product_id")
+  supplierId  String   @map("supplier_id")
+  supplierSku String?  @map("supplier_sku")
+  unitPrice   Decimal? @map("unit_price") @db.Decimal(10, 2)
+  minOrderQty Decimal  @default(1) @map("min_order_qty") @db.Decimal(10, 2)
+  isPreferred Boolean  @default(false) @map("is_preferred")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+  @@index([productId])
+  @@map("product_suppliers")
+}
+
+model PurchaseOrder {
+  id           String              @id @default(uuid())
+  poNumber     String              @unique @map("po_number")
+  supplierId   String              @map("supplier_id")
+  status       PurchaseOrderStatus @default(draft)
+  expectedDate DateTime?           @map("expected_date") @db.Date
+  notes        String?             @db.Text
+  totalAmount  Decimal             @default(0) @map("total_amount") @db.Decimal(12, 2)
+  createdById  String              @map("created_by")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+
+  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+  createdBy User                @relation("POCreatedBy", fields: [createdById], references: [id])
+  items     PurchaseOrderItem[]
+
+  @@index([supplierId])
+  @@index([status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id          String   @id @default(uuid())
+  poId        String   @map("po_id")
+  productId   String   @map("product_id")
+  qtyOrdered  Decimal  @map("qty_ordered") @db.Decimal(10, 2)
+  qtyReceived Decimal  @default(0) @map("qty_received") @db.Decimal(10, 2)
+  unitPrice   Decimal? @map("unit_price") @db.Decimal(10, 2)
+  totalPrice  Decimal  @default(0) @map("total_price") @db.Decimal(12, 2)
+  notes       String?  @db.Text
+
+  po      PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  product Product       @relation(fields: [productId], references: [id])
+
+  @@index([poId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+model AlertRule {
+  id               String        @id @default(uuid())
+  ruleName         String        @map("rule_name")
+  ruleType         AlertRuleType @map("rule_type")
+  productId        String?       @map("product_id")
+  categoryId       String?       @map("category_id")
+  thresholdValue   Decimal?      @map("threshold_value") @db.Decimal(10, 2)
+  notifyChannels   String[]      @default(["in_app"]) @map("notify_channels")
+  notifyUserIds    String[]      @default([]) @map("notify_user_ids")
+  autoCreatePo     Boolean       @default(false) @map("auto_create_po")
+  escalateAfterHrs Int           @default(24) @map("escalate_after_hrs")
+  isActive         Boolean       @default(true) @map("is_active")
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  product   Product?         @relation(fields: [productId], references: [id])
+  category  ProductCategory? @relation(fields: [categoryId], references: [id])
+  alertLogs AlertLog[]
+
+  @@index([isActive])
+  @@map("alert_rules")
+}
+
+model AlertLog {
+  id           String      @id @default(uuid())
+  ruleId       String      @map("rule_id")
+  productId    String      @map("product_id")
+  triggeredAt  DateTime    @default(now()) @map("triggered_at")
+  alertMessage String?     @map("alert_message") @db.Text
+  status       AlertStatus @default(open)
+  resolvedAt   DateTime?   @map("resolved_at")
+  resolvedById String?     @map("resolved_by")
+
+  rule       AlertRule @relation(fields: [ruleId], references: [id])
+  product    Product   @relation(fields: [productId], references: [id])
+  resolvedBy User?     @relation("AlertResolvedBy", fields: [resolvedById], references: [id])
+
+  @@index([productId])
+  @@index([status])
+  @@map("alert_logs")
+}
+
+// ============================================
+// STOCK TRANSFER MODULE
+// ============================================
+
+model StockTransfer {
+  id              String         @id @default(uuid())
+
+  transferType    TransferType   @map("transfer_type")
+  status          TransferStatus @default(DRAFT)
+  transferNumber  String         @unique @map("transfer_number")
+
+  partyName       String         @map("party_name")
+  partyGSTNumber  String?        @map("party_gst_number")
+  partyAddress    String?        @map("party_address") @db.Text
+
+  billNumber      String?        @map("bill_number")
+  billDate        DateTime?      @map("bill_date")
+  placeOfSupply   String?        @map("place_of_supply")
+  poNumber        String?        @map("po_number")
+  contactNumber   String?        @map("contact_number")
+  transporterName String?        @map("transporter_name")
+  vehicleNumber   String?        @map("vehicle_number")
+  eWayBillNumber  String?        @map("e_way_bill_number")
+
+  shippedToName   String?        @map("shipped_to_name")
+  shippedToAddress String?       @map("shipped_to_address") @db.Text
+  shippedToGST    String?        @map("shipped_to_gst")
+
+  transferDate    DateTime       @default(now()) @map("transfer_date")
+  notes           String?        @db.Text
+
+  additionalCharges Json?        @map("additional_charges")
+
+  items           StockTransferItem[]
+
+  createdById     String         @map("created_by")
+  createdBy       User           @relation("TransferCreatedBy", fields: [createdById], references: [id])
+  confirmedById   String?        @map("confirmed_by")
+  confirmedBy     User?          @relation("TransferConfirmedBy", fields: [confirmedById], references: [id])
+  confirmedAt     DateTime?      @map("confirmed_at")
+  cancelledById   String?        @map("cancelled_by")
+  cancelledBy     User?          @relation("TransferCancelledBy", fields: [cancelledById], references: [id])
+  cancelledAt     DateTime?      @map("cancelled_at")
+
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([transferType])
+  @@index([status])
+  @@index([transferDate])
+  @@index([createdById])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id              String        @id @default(uuid())
+
+  transferId      String        @map("transfer_id")
+  transfer        StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  productId       String        @map("product_id")
+  product         Product       @relation(fields: [productId], references: [id])
+
+  qtyRequested    Decimal       @map("qty_requested") @db.Decimal(12, 3)
+  qtyFulfilled    Decimal       @default(0) @map("qty_fulfilled") @db.Decimal(12, 3)
+
+  unitCost        Decimal?      @map("unit_cost") @db.Decimal(12, 2)
+  notes           String?       @db.Text
+
+  qtyOnHandAtTime Decimal       @map("qty_on_hand_at_time") @db.Decimal(12, 3)
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([transferId])
+  @@index([productId])
+  @@map("stock_transfer_items")
 }

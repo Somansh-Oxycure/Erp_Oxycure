@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { seedUsers } from './seed/users';
+import { seedUnits } from './seed/units';
 
 const prisma = new PrismaClient();
 
@@ -7,6 +8,7 @@ async function main() {
   console.log('\n🌱 Seeding Oxycure ERP database...\n');
 
   await seedUsers(prisma);
+  await seedUnits(prisma);
 
   console.log('\n✅ Users seeded.\n');
   console.log('📋 Login Credentials:');

@@ -1,11 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { handlePrismaError } from '../common/utils/prisma-error.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, AddProposalItemDto, CreateProposalFollowUpDto, UpdateProposalFollowUpDto, AddProposalNoteDto } from './dto/proposal.dto';
-import { ProposalStatus, UserRole } from '@prisma/client';
+import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, AddProposalItemDto, CreateProposalFollowUpDto, UpdateProposalFollowUpDto, AddProposalNoteDto, GenerateProposalDto } from './dto/proposal.dto';
+import { Prisma, ProposalStatus, UserRole } from '@prisma/client';
 import { extname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 
 const PROPOSAL_INCLUDE = {
   ticket: {
@@ -427,9 +427,155 @@ export class ProposalsService {
     };
   }
 
+  // ─── Generate & Save Proposal .docx (linked to a proposal record) ────────
+  async generateAndSave(
+    id: string,
+    dto: GenerateProposalDto,
+    currentUser: { id: string; role: UserRole },
+  ): Promise<Buffer> {
+    const proposal = await this.findOne(id);
+
+    const buffer = await this.generateDocument(dto);
+
+    // Persist file to disk
+    ProposalsService.ensureUploadDir();
+    const refSlug = (proposal.ticket?.referenceId || id).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `${refSlug}.docx`;
+    const filePath = join(process.cwd(), 'uploads', 'proposals', filename);
+    writeFileSync(filePath, buffer);
+
+    const documentUrl = `/uploads/proposals/${filename}`;
+    const documentOriginalName = `${dto.ref_number || refSlug}.docx`;
+
+    await this.prisma.proposal.update({
+      where: { id },
+      data: {
+        documentUrl,
+        documentOriginalName,
+        generateFormData: dto as unknown as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.auditService.log({
+      userId: currentUser.id,
+      action: 'GENERATE',
+      entityType: 'proposals',
+      entityId: id,
+      changes: { after: { documentUrl } },
+    });
+
+    return buffer;
+  }
+
   // ─── Ensure upload directory exists ───────────────────────────────────────
   static ensureUploadDir() {
     const dir = join(process.cwd(), 'uploads', 'proposals');
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  }
+
+  // ─── Generate Proposal .docx from template ────────────────────────────────
+  async generateDocument(dto: GenerateProposalDto): Promise<Buffer> {
+    // Support both v2 (dynamic units) and legacy v1 template
+    const templatePath =
+      existsSync(join(process.cwd(), 'templates', 'proposal-v2.docx'))
+        ? join(process.cwd(), 'templates', 'proposal-v2.docx')
+        : join(process.cwd(), 'templates', 'proposal.docx');
+    if (!existsSync(templatePath)) {
+      throw new InternalServerErrorException(
+        'Proposal template not found. Please run the template generation script first.',
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const PizZip = require('pizzip');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Docxtemplater = require('docxtemplater');
+
+    const content = readFileSync(templatePath, 'binary');
+    const zip = new PizZip(content);
+
+    let doc: { render: (data: unknown) => void; getZip: () => { generate: (opts: unknown) => Buffer } };
+    try {
+      doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+      });
+    } catch (err: unknown) {
+      const e = err as Error;
+      throw new InternalServerErrorException(`Template parsing error: ${e.message}`);
+    }
+
+    // Build items with formatted amount (description comes from the selected unit)
+    const items = (dto.items || []).map((item, index) => ({
+      ...item,
+      sno: index + 1,
+      description: item.description || '',
+      amount_formatted: (item.quantity * item.amount).toLocaleString('en-IN'),
+    }));
+
+    const itemsTotal = items.reduce((sum, i) => sum + i.quantity * i.amount, 0);
+    const freightAmount = dto.freight_amount ?? 0;
+    const specialDiscount = dto.special_discount ?? 0;
+    const projectDiscount = dto.project_discount ?? 0;
+    const totalProjectValue =
+      dto.total_project_value ?? itemsTotal + freightAmount - specialDiscount - projectDiscount;
+    const totalSupplyQty = items.reduce((sum, i) => sum + Number(i.quantity), 0);
+
+    // ── Hardcoded company defaults (not exposed in form) ──────────────────
+    const ABOUT_US =
+      'O2Cure stands as a flagship brand, wholly dedicated to enhancing lives by purifying the Earth\'s most essential element: Air. We\'re dedicated to enhancing lives through advanced air purification. Our tailored solutions prioritize indoor air quality, considering factors like area type, pollutants, health, and environment. Our products use both Passive and Active Purification Technologies with global certifications to eliminate pollutants from 10 microns to 0.001 microns.';
+
+    const FOOTER_NOTE_1 =
+      'If you have any suggestions/complaints, please feel free to write to us.';
+    const FOOTER_NOTE_2 =
+      'We hope our offer is in line with your requirement. For any further clarification please feel free to contact the undersigned.';
+
+    const gstPct = dto.gst_percentage ?? 18;
+
+    const data = {
+      ...dto,
+      items,
+      // Computed totals
+      total_supply_qty: totalSupplyQty,
+      total_supply_amount: itemsTotal.toLocaleString('en-IN'),
+      total_qty: totalSupplyQty,
+      items_total: itemsTotal.toLocaleString('en-IN'),
+      freight_amount: freightAmount.toLocaleString('en-IN'),
+      special_discount: specialDiscount.toLocaleString('en-IN'),
+      project_discount: projectDiscount.toLocaleString('en-IN'),
+      total_project_value: totalProjectValue.toLocaleString('en-IN'),
+      // Terms defaults (overridable via dto)
+      gst_percentage: gstPct,
+      gst_text: dto.gst_text ?? `GST Shall be ${gstPct}% Extra.`,
+      price_basis: dto.price_basis ?? 'Ex-Works, Gurugram (Haryana)',
+      installation_included: dto.installation_included ?? 'Included',
+      freight_included: dto.freight_included ?? 'Included',
+      freight_terms: dto.freight_terms ?? 'Okay',
+      third_party_insurance: dto.third_party_insurance ?? 'Okay',
+      car_policy: dto.car_policy ?? 'Okay',
+      water_electricity: dto.water_electricity ?? 'Okay',
+      payment_note: dto.payment_note ?? 'Kindly ensure that the ABG amount shall be released within 7 days of the supply of the units.',
+      billing_delivery_note: dto.billing_delivery_note ?? 'Billing & Delivery Address Shall Be Mentioned in Your Purchase Order',
+      site_person_details: dto.site_person_details ?? '',
+      validity_days: dto.validity_days ?? 30,
+      // Hardcoded company content
+      about_us: ABOUT_US,
+      footer_note_1: FOOTER_NOTE_1,
+      footer_note_2: FOOTER_NOTE_2,
+    };
+
+    try {
+      doc.render(data);
+    } catch (err: unknown) {
+      const e = err as { properties?: { errors?: unknown[] }; message: string };
+      if (e.properties?.errors?.length) {
+        throw new InternalServerErrorException(
+          `Template render error: ${JSON.stringify(e.properties.errors)}`,
+        );
+      }
+      throw new InternalServerErrorException(`Document generation failed: ${e.message}`);
+    }
+
+    return doc.getZip().generate({ type: 'nodebuffer' }) as Buffer;
   }
 }

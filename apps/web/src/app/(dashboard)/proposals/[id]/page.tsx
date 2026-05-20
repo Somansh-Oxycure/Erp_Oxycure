@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { proposalsApi } from '@/lib/api';
 import {
   cn,
@@ -22,12 +22,17 @@ import {
   StickyNote,
   FileText,
   Download,
+  FileDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useRole } from '@/hooks/useRole';
+import { useProposalBoQ } from '@/hooks/boq/useProposalBoQ';
+import { useFinalizeBoQ } from '@/hooks/boq/useFinalizeBoQ';
+import { BoQBuilderPanel } from '@/components/boq/BoQBuilderPanel';
+import { BoQViewPanel } from '@/components/boq/BoQViewPanel';
 
 /** Format a number as Indian Rupee with full locale format */
 function formatINR(amount: number | string | null | undefined): string {
@@ -52,6 +57,129 @@ const VALID_TRANSITIONS: Record<string, { status: string; label: string; icon: R
 /** Statuses that require a ConfirmDialog before applying */
 const TERMINAL_STATUSES = new Set(['accepted', 'rejected']);
 
+// ─── BoQ Section ──────────────────────────────────────────────────────────────
+
+function BoQSection({
+  proposalId,
+  proposalStatus,
+  boq,
+  boqLoading,
+  boqMode,
+  setBoqMode,
+  role,
+  qc,
+}: {
+  proposalId: string;
+  proposalStatus: string;
+  boq: import('@/types/api').BoQ | null;
+  boqLoading: boolean;
+  boqMode: 'builder' | 'view' | null;
+  setBoqMode: (m: 'builder' | 'view' | null) => void;
+  role: string | null;
+  qc: QueryClient;
+}) {
+  const canGenerateBoQ = role !== 'installer';
+  const proposalEditable = !['rejected', 'expired'].includes(proposalStatus);
+  const canFinalize = role === 'admin' || role === 'manager';
+
+  const finalizeMutation = useFinalizeBoQ(boq?.id ?? '', proposalId);
+
+  if (boqLoading) {
+    return (
+      <div className="mt-6 p-5 rounded-2xl bg-card border border-border">
+        <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+        <div className="mt-3 h-3 w-48 bg-muted animate-pulse rounded" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-6 space-y-4">
+      {/* ── BoQ summary card ── */}
+      <div className="p-5 rounded-2xl bg-card border border-border">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+              Bill of Quantities
+            </p>
+            {!boq ? (
+              <p className="text-sm text-muted-foreground italic">No BoQ generated yet.</p>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm font-semibold text-foreground">
+                  {boq.boqNumber}
+                </span>
+                <StatusBadge status={boq.status} />
+                <span className="text-sm text-emerald-500 font-bold">
+                  {Number(boq.totalAmount).toLocaleString('en-IN', {
+                    style: 'currency',
+                    currency: 'INR',
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {!boq && canGenerateBoQ && proposalEditable && (
+              <button
+                onClick={() => setBoqMode('builder')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors shadow-sm"
+              >
+                Generate BoQ
+              </button>
+            )}
+            {boq && boq.status === 'draft' && canGenerateBoQ && (
+              <>
+                <button
+                  onClick={() => setBoqMode('builder')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600/10 hover:bg-sky-600/20 text-sky-600 text-xs font-semibold transition-colors border border-sky-600/30"
+                >
+                  Edit BoQ
+                </button>
+                {canFinalize && (
+                  <button
+                    onClick={() => finalizeMutation.mutate()}
+                    disabled={finalizeMutation.isPending}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-sm disabled:opacity-60"
+                  >
+                    Finalize
+                  </button>
+                )}
+              </>
+            )}
+            {boq && (boq.status === 'draft' || boq.status === 'final') && (
+              <button
+                onClick={() => setBoqMode('view')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/70 text-foreground text-xs font-semibold transition-colors border border-border"
+              >
+                View BoQ
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Slide-down panels ── */}
+      {boqMode === 'builder' && (
+        <BoQBuilderPanel
+          proposalId={proposalId}
+          existingBoQ={boq}
+          onClose={() => setBoqMode(null)}
+          onSaved={() => {
+            setBoqMode(null);
+            qc.invalidateQueries({ queryKey: ['boqs', { proposalId }] });
+          }}
+        />
+      )}
+      {boqMode === 'view' && boq && (
+        <BoQViewPanel boq={boq} onBack={() => setBoqMode(null)} />
+      )}
+    </div>
+  );
+}
+
 export default function ProposalDetailPage() {
   const { id } = useParams() as { id: string };
   const router  = useRouter();
@@ -63,6 +191,9 @@ export default function ProposalDetailPage() {
   const [followUpDate, setFollowUpDate] = useState('');
   const [followUpOutcome, setFollowUpOutcome] = useState('');
   const [noteInput, setNoteInput] = useState('');
+  const [boqMode, setBoqMode] = useState<'builder' | 'view' | null>(null);
+
+  const { data: boq, isLoading: boqLoading } = useProposalBoQ(id);
 
   const { data, isLoading } = useQuery({
     queryKey: ['proposal', id],
@@ -146,16 +277,25 @@ export default function ProposalDetailPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Breadcrumb ── */}
-      <div className="shrink-0 flex items-center gap-2 px-6 py-3 border-b border-border bg-background text-sm text-muted-foreground">
+      <div className="shrink-0 flex items-center justify-between gap-2 px-6 py-3 border-b border-border bg-background text-sm text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => router.push('/proposals')}
+            className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Proposals
+          </button>
+          <ChevronRight className="w-3.5 h-3.5" />
+          <span className="text-foreground font-medium">{proposal.ticket?.referenceId || proposal.id.slice(0, 8).toUpperCase()}</span>
+        </div>
         <button
-          onClick={() => router.push('/proposals')}
-          className="flex items-center gap-1.5 hover:text-foreground transition-colors"
+          onClick={() => router.push(`/proposals/${id}/generate`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition shadow-sm"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Proposals
+          <FileDown className="w-3.5 h-3.5" />
+          Generate Proposal
         </button>
-        <ChevronRight className="w-3.5 h-3.5" />
-        <span className="text-foreground font-medium">{proposal.ticket?.referenceId || proposal.id.slice(0, 8).toUpperCase()}</span>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -530,6 +670,18 @@ export default function ProposalDetailPage() {
 
             </div>
           </div>
+
+          {/* ══ BoQ Section — full width, below the main grid ══ */}
+          <BoQSection
+            proposalId={id}
+            proposalStatus={proposal.status}
+            boq={boq ?? null}
+            boqLoading={boqLoading}
+            boqMode={boqMode}
+            setBoqMode={setBoqMode}
+            role={role}
+            qc={qc}
+          />
         </div>
       </div>
 

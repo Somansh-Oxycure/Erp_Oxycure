@@ -18,9 +18,10 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes } from '@nestjs/swagg
 import { ProposalUploadInterceptor } from './proposal-upload.interceptor';
 import { UserRole } from '@prisma/client';
 import { ProposalsService } from './proposals.service';
-import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, CreateProposalFollowUpDto, UpdateProposalFollowUpDto, AddProposalNoteDto } from './dto/proposal.dto';
+import { ProposalFilterDto, UpdateProposalStatusDto, UpdateProposalDto, CreateProposalFollowUpDto, UpdateProposalFollowUpDto, AddProposalNoteDto, GenerateProposalDto } from './dto/proposal.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 type RequestUser = {
@@ -62,6 +63,7 @@ export class ProposalsController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Update a draft proposal (items, notes, validity)' })
   update(
     @Param('id', ParseUUIDPipe) id: string,
@@ -72,6 +74,7 @@ export class ProposalsController {
   }
 
   @Patch(':id/status')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Update proposal status (send, accept, reject, expire)' })
   updateStatus(
     @Param('id', ParseUUIDPipe) id: string,
@@ -82,6 +85,7 @@ export class ProposalsController {
   }
 
   @Post(':id/follow-ups')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Schedule a follow-up for a proposal' })
   createFollowUp(
     @Param('id', ParseUUIDPipe) id: string,
@@ -92,6 +96,7 @@ export class ProposalsController {
   }
 
   @Patch(':id/follow-ups/:fid')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Update proposal follow-up status/outcome' })
   updateFollowUp(
     @Param('fid', ParseUUIDPipe) fid: string,
@@ -101,6 +106,7 @@ export class ProposalsController {
   }
 
   @Post(':id/notes')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson, UserRole.service_engineer, UserRole.design_engineer)
   @ApiOperation({ summary: 'Add a timestamped note to a proposal' })
   addNote(
     @Param('id', ParseUUIDPipe) id: string,
@@ -143,6 +149,7 @@ export class ProposalsController {
   }
 
   @Post(':id/document')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Upload or replace the proposal document' })
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(ProposalUploadInterceptor)
@@ -152,5 +159,49 @@ export class ProposalsController {
   ) {
     if (!file) throw new BadRequestException('No file provided');
     return this.proposalsService.uploadDocument(id, file);
+  }
+
+  @Post('generate')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
+  @ApiOperation({ summary: 'Generate a proposal .docx from form data and download it (standalone)' })
+  async generateDocument(
+    @Body() dto: GenerateProposalDto,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.proposalsService.generateDocument(dto);
+    const filename = `proposal_${dto.ref_number || Date.now()}.docx`;
+    const encoded = encodeURIComponent(filename);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"; filename*=UTF-8''${encoded}`,
+    );
+    res.end(buffer);
+  }
+
+  @Post(':id/generate')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
+  @ApiOperation({ summary: 'Generate a proposal .docx, save it and its form data to the proposal record' })
+  async generateAndSave(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: GenerateProposalDto,
+    @CurrentUser() user: RequestUser,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.proposalsService.generateAndSave(id, dto, user);
+    const filename = `proposal_${dto.ref_number || id}.docx`;
+    const encoded = encodeURIComponent(filename);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${filename}"; filename*=UTF-8''${encoded}`,
+    );
+    res.end(buffer);
   }
 }

@@ -92,6 +92,7 @@ export class TicketsController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson, UserRole.service_engineer)
   @ApiOperation({ summary: 'Update ticket details or status' })
   update(
     @Param('id', ParseUUIDPipe) id: string,

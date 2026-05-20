@@ -1,11 +1,14 @@
 import { Controller, Get, Patch, Body, Param, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { UserRole } from '@prisma/client';
 import { CustomersService } from './customers.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('customers')
 export class CustomersController {
   constructor(private customersService: CustomersService) {}
@@ -31,6 +34,7 @@ export class CustomersController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Update customer details' })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() body: Record<string, string>) {
     return this.customersService.update(id, body);

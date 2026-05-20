@@ -146,3 +146,95 @@ export class AddProposalNoteDto {
   @IsNotEmpty()
   content: string;
 }
+
+// ── Generate Proposal DTO ──────────────────────────────────────────────────────
+
+export class GenerateProposalItemDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  name: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  description?: string;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(1)
+  quantity: number;
+
+  @ApiProperty()
+  @IsNumber()
+  @Min(0)
+  amount: number;
+}
+
+export class GenerateProposalDto {
+  // Basic Details
+  @ApiProperty() @IsString() @IsNotEmpty() client_name: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() client_company_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() contact_person_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() contact_person_phone?: string;
+  @ApiProperty() @IsString() @IsNotEmpty() project_name: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() project_description?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() ref_number?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() date?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() submitted_date?: string;
+
+  // Project Details
+  @ApiPropertyOptional() @IsOptional() @IsString() consultant_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() architect_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() project_stage?: string;
+
+  // Items
+  @ApiProperty({ type: [GenerateProposalItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => GenerateProposalItemDto)
+  items: GenerateProposalItemDto[];
+
+  // Financial Summary
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) freight_amount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) special_discount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) project_discount?: number;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() @Min(0) total_project_value?: number;
+
+  // Terms & Conditions
+  @ApiPropertyOptional() @IsOptional() @IsNumber() gst_percentage?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() gst_text?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() price_basis?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() installation_included?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() freight_included?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() warranty_period?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() delivery_timeline?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() installation_timeline?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() freight_terms?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() third_party_insurance?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() car_policy?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() water_electricity?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() payment_note?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() billing_delivery_note?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() site_person_details?: string;
+
+  // Commercial Terms
+  @ApiPropertyOptional() @IsOptional() @IsString() dlp_period?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() payment_terms?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() dispatch_time?: string;
+  @ApiPropertyOptional() @IsOptional() @IsNumber() validity_days?: number;
+
+  // Company & Bank Details
+  @ApiPropertyOptional() @IsOptional() @IsString() company_address?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() company_gstin?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() company_pan?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() bank_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() bank_address?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() bank_ifsc?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() bank_account_number?: string;
+
+  // Sales Person
+  @ApiPropertyOptional() @IsOptional() @IsString() salesperson_name?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() salesperson_phone?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() salesperson_email?: string;
+}

@@ -31,6 +31,11 @@ const PROPOSAL_STATUS_VARIANTS: Record<string, Variant> = {
   expired:  'yellow',
 };
 
+const BOQ_STATUS_VARIANTS: Record<string, Variant> = {
+  final:    'green',
+  archived: 'gray',
+};
+
 const STATUS_LABELS: Record<string, string> = {
   new:             'New',
   contacted:       'Contacted',
@@ -44,11 +49,14 @@ const STATUS_LABELS: Record<string, string> = {
   accepted:        'Accepted',
   rejected:        'Rejected',
   expired:         'Expired',
+  final:           'Final',
+  archived:        'Archived',
 };
 
-/** Merged variant lookup — ticket statuses take precedence over proposal ones */
+/** Merged variant lookup */
 const ALL_VARIANTS: Record<string, Variant> = {
   ...PROPOSAL_STATUS_VARIANTS,
+  ...BOQ_STATUS_VARIANTS,
   ...TICKET_STATUS_VARIANTS,
 };
 
@@ -65,7 +73,7 @@ interface StatusBadgeProps {
  */
 export function StatusBadge({ status, label, className }: StatusBadgeProps) {
   const variant = ALL_VARIANTS[status] ?? 'gray';
-  const display = label ?? STATUS_LABELS[status] ?? status.replace(/_/g, ' ');
+  const display = label ?? STATUS_LABELS[status] ?? (status ? status.replace(/_/g, ' ') : '');
 
   return (
     <span

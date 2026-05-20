@@ -78,6 +78,7 @@ function TicketsPageInner() {
   useEffect(() => {
     const id = searchParams.get('id');
     if (id) setSelectedId(id);
+    if (searchParams.get('create') === '1') setShowCreate(true);
     setDateRange(getDateRange('this_month'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

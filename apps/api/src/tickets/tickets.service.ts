@@ -232,10 +232,6 @@ export class TicketsService {
           },
           orderBy: { createdAt: 'desc' },
         },
-        designSpecs: {
-          select: { id: true, status: true, requirementSummary: true, createdAt: true },
-          orderBy: { createdAt: 'desc' },
-        },
         quotations: {
           select: {
             id: true,

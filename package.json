@@ -16,9 +16,16 @@
     "db:push": "node_modules/.bin/prisma db push --schema=packages/database/prisma/schema.prisma",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "docker:reset": "docker-compose down -v && docker-compose up -d"
+    "docker:reset": "docker-compose down -v && docker-compose up -d",
+    "test:api": "node tests/api-test.js",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:report": "npx playwright show-report tests/playwright-report",
+    "test:install": "npm install -D @playwright/test && npx playwright install chromium",
+    "db:unlock-admin": "node packages/database/unlock-admin.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "turbo": "^2.0.0",
     "typescript": "^5.4.5"
   },
