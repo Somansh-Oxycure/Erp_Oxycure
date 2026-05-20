@@ -4,7 +4,22 @@
 # ============================================================
 
 $Root = $PSScriptRoot
-$DB_URL = "postgresql://oxycure:oxycure_secret_2026@localhost:5433/oxycure_erp?schema=public"
+$ApiEnvFile = Join-Path $Root "apps\api\.env"
+$DB_URL = $null
+
+if (Test-Path $ApiEnvFile) {
+    $dbLine = Get-Content $ApiEnvFile | Where-Object { $_ -match '^\s*DATABASE_URL\s*=' } | Select-Object -First 1
+    if ($dbLine) {
+        $DB_URL = ($dbLine -replace '^\s*DATABASE_URL\s*=\s*', '').Trim().Trim('"')
+    }
+}
+
+if (-not $DB_URL) {
+    $DB_URL = "postgresql://oxycure:oxycure_secret_2026@localhost:5433/oxycure_erp?schema=public"
+    Write-Host "[Info] DATABASE_URL not found in apps/api/.env. Falling back to local Postgres." -ForegroundColor Yellow
+}
+
+$UseLocalDb = ($DB_URL -match '@localhost') -or ($DB_URL -match '@127\.0\.0\.1')
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -12,15 +27,19 @@ Write-Host "  Oxycure ERP — Starting up..." -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ── 1. Start Docker (PostgreSQL) ────────────────────────────
-Write-Host "[1/3] Starting Docker (PostgreSQL)..." -ForegroundColor Yellow
-Set-Location $Root
-docker-compose up -d
+# ── 1. Start Docker (PostgreSQL) only for local DB ─────────
+if ($UseLocalDb) {
+    Write-Host "[1/3] Starting Docker (PostgreSQL)..." -ForegroundColor Yellow
+    Set-Location $Root
+    docker-compose up -d
 
-# Wait for Postgres to be healthy
-Write-Host "      Waiting for database to be ready..." -ForegroundColor Gray
-Start-Sleep -Seconds 10
-Write-Host "      Assuming database is ready." -ForegroundColor Green
+    # Wait for Postgres to be healthy
+    Write-Host "      Waiting for database to be ready..." -ForegroundColor Gray
+    Start-Sleep -Seconds 10
+    Write-Host "      Assuming database is ready." -ForegroundColor Green
+} else {
+    Write-Host "[1/3] Skipping Docker DB startup (using external DATABASE_URL from apps/api/.env)." -ForegroundColor Yellow
+}
 
 # ── 2. Start API (NestJS) in a new window ───────────────────
 Write-Host "[2/3] Starting API on http://localhost:3001 ..." -ForegroundColor Yellow

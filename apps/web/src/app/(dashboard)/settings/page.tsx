@@ -47,7 +47,7 @@ export default function SettingsPage() {
 
   const exportMutation = useMutation({
     mutationFn: async (keys: string[]) => {
-      const res = await backupApi.exportData(keys);
+      const res = await backupApi.createBackup(keys);
       const blob = new Blob([res.data], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -62,16 +62,19 @@ export default function SettingsPage() {
 
   const restoreMutation = useMutation({
     mutationFn: async (file: File) => {
-      const res = await backupApi.restoreData(file);
+      const res = await backupApi.uploadBackup(file);
       return res.data;
     },
     onSuccess: (data) => {
-      toast.success(`Restored ${data.restored?.length ?? 0} table(s) successfully`);
+      toast.success(`Restored ${data.restored?.length ?? data.restoredTables ?? 0} table(s) successfully`);
       setConfirmRestore(false);
       setPendingFile(null);
     },
     onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Restore failed';
+      const responseMessage = (err as { response?: { data?: { message?: string | string[] } } })?.response?.data?.message;
+      const msg = Array.isArray(responseMessage)
+        ? responseMessage.join(', ')
+        : responseMessage ?? 'Restore failed';
       toast.error(msg);
       setConfirmRestore(false);
       setPendingFile(null);
@@ -184,10 +187,10 @@ export default function SettingsPage() {
           <Database className="w-5 h-5 text-indigo-500 shrink-0" />
           <div>
             <h2 className="text-base font-semibold text-slate-800 dark:text-slate-200">
-              Database Backup &amp; Restore
+              Database Backup Create &amp; Upload Restore
             </h2>
             <p className="text-xs text-slate-500">
-              Export table data as JSON files and restore them later
+              Create JSON backups and upload them later for full restore
             </p>
           </div>
         </div>
@@ -253,7 +256,7 @@ export default function SettingsPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
             >
               <Download className="w-4 h-4" />
-              Export selected ({selected.size})
+              Create backup (selected: {selected.size})
             </button>
             <button
               onClick={() => handleExport(true)}
@@ -261,7 +264,7 @@ export default function SettingsPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
             >
               <Download className="w-4 h-4" />
-              Export all tables
+              Create full backup
             </button>
           </div>
 
@@ -271,7 +274,7 @@ export default function SettingsPage() {
               <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
-                  Restore from backup
+                  Upload backup and restore
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
                   Uploading a backup file will <strong>overwrite existing data</strong> in each
@@ -292,7 +295,7 @@ export default function SettingsPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition"
             >
               <Upload className="w-4 h-4" />
-              {restoreMutation.isPending ? 'Restoring…' : 'Upload backup file (.json)'}
+              {restoreMutation.isPending ? 'Restoring…' : 'Upload backup file and restore (.json)'}
             </button>
           </div>
         </div>

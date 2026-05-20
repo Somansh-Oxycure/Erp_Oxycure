@@ -8,23 +8,17 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { TopBar } from '@/components/layout/topbar';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, fetchMe, isLoading } = useAuthStore();
+  const { fetchMe, isLoading } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    // If already authenticated (e.g. state restored from localStorage),
-    // skip the immediate fetchMe to avoid burning a rotating refresh token.
-    // API calls made by individual pages will still handle 401s via the
-    // axios interceptor, which performs the token refresh when needed.
-    if (isAuthenticated) return;
-
     fetchMe().then(() => {
       if (!useAuthStore.getState().isAuthenticated) {
         router.replace('/login');
       }
     });
-  }, []);
+  }, [fetchMe, router]);
 
   if (isLoading) {
     return (

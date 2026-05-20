@@ -336,14 +336,29 @@ export const backupApi = {
   /** List all exportable table keys */
   listTables: () => api.get('/backup/tables'),
 
-  /** Download a JSON backup for the given table keys (empty = all) */
+  /** Create/download a JSON backup for the given table keys (empty = all) */
+  createBackup: (keys: string[]) =>
+    api.get('/backup/create', {
+      params: keys.length ? { tables: keys.join(',') } : {},
+      responseType: 'blob',
+    }),
+
+  /** Upload a JSON backup file and restore it */
+  uploadBackup: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return api.post('/backup/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** Backward-compatible aliases */
   exportData: (keys: string[]) =>
     api.get('/backup/export', {
       params: keys.length ? { tables: keys.join(',') } : {},
       responseType: 'blob',
     }),
 
-  /** Upload a JSON backup file and restore it */
   restoreData: (file: File) => {
     const form = new FormData();
     form.append('file', file);

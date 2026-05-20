@@ -26,6 +26,22 @@ import { Roles } from '../common/decorators/roles.decorator';
 export class BackupController {
   constructor(private readonly service: BackupService) {}
 
+  private sendBackupJson(res: Response, backup: unknown) {
+    const filename = `oxycure-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Prisma payloads may contain BigInt values from DB columns.
+    // Convert BigInt to string so JSON serialization is stable.
+    const json = JSON.stringify(
+      backup,
+      (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+      2,
+    );
+
+    res.send(json);
+  }
+
   /** List all available tables */
   @Get('tables')
   @ApiOperation({ summary: 'List all exportable tables' })
@@ -38,6 +54,18 @@ export class BackupController {
    * ?tables=user,product,customer   — individual tables
    * (omit query param)              — export everything
    */
+  @Get('create')
+  @ApiOperation({ summary: 'Create table data backup as JSON file (new endpoint alias)' })
+  @ApiQuery({ name: 'tables', required: false, description: 'Comma-separated table keys, omit for full backup' })
+  async createBackup(
+    @Query('tables') tables: string | undefined,
+    @Res() res: Response,
+  ) {
+    const keys = tables ? tables.split(',').map((k) => k.trim()).filter(Boolean) : [];
+    const backup = await this.service.exportData(keys);
+    this.sendBackupJson(res, backup);
+  }
+
   @Get('export')
   @ApiOperation({ summary: 'Export table data as JSON backup file' })
   @ApiQuery({ name: 'tables', required: false, description: 'Comma-separated table keys, omit for full backup' })
@@ -47,17 +75,33 @@ export class BackupController {
   ) {
     const keys = tables ? tables.split(',').map((k) => k.trim()).filter(Boolean) : [];
     const backup = await this.service.exportData(keys);
-
-    const filename = `oxycure-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(JSON.stringify(backup, null, 2));
+    this.sendBackupJson(res, backup);
   }
 
   /**
    * Restore data from an uploaded JSON backup file.
    * This is a destructive operation — existing rows in each table are removed first.
    */
+  @Post('upload')
+  @ApiOperation({ summary: 'Upload and restore DB tables from a JSON backup file (new endpoint alias)' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 100 * 1024 * 1024 } }))
+  async uploadBackup(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    if (!file.originalname.toLowerCase().endsWith('.json')) {
+      throw new BadRequestException('Only JSON backup files are accepted');
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(file.buffer.toString('utf-8'));
+    } catch {
+      throw new BadRequestException('Uploaded file is not valid JSON');
+    }
+
+    return this.service.restoreData(payload as any);
+  }
+
   @Post('restore')
   @ApiOperation({ summary: 'Restore DB tables from a JSON backup file (admin only, destructive)' })
   @ApiConsumes('multipart/form-data')

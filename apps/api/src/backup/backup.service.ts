@@ -21,7 +21,7 @@ export const TABLE_CATALOG = [
   { key: 'ticket',           label: 'Tickets',             table: 'tickets' },
   { key: 'ticketNote',       label: 'Ticket Notes',        table: 'ticket_notes' },
   { key: 'ticketFollowUp',   label: 'Ticket Follow-ups',   table: 'ticket_follow_ups' },
-  { key: 'ticketStatusHistory', label: 'Ticket Status History', table: 'ticket_status_histories' },
+  { key: 'ticketStatusHistory', label: 'Ticket Status History', table: 'ticket_status_history' },
   { key: 'quotation',        label: 'Quotations',          table: 'quotations' },
   { key: 'quotationItem',    label: 'Quotation Items',     table: 'quotation_items' },
   { key: 'order',            label: 'Orders',              table: 'orders' },
@@ -78,21 +78,29 @@ export class BackupService {
 
     return {
       meta: {
-        version: 1,
+        version: 2,
+        format: 'oxycure-backup',
         exportedAt: new Date().toISOString(),
         tables: entries.map((e) => e.key),
+        rowCounts: entries.reduce<Record<string, number>>((acc, e) => {
+          acc[e.key] = data[e.key]?.length ?? 0;
+          return acc;
+        }, {}),
       },
       data,
     };
   }
 
   /** Restore tables from uploaded JSON.  Replaces existing data. Admin-only. */
-  async restoreData(payload: { meta: { version: number; tables: string[] }; data: Record<string, unknown[]> }) {
+  async restoreData(payload: { meta: { version: number; tables?: string[]; format?: string }; data: Record<string, unknown[]> }) {
     if (!payload?.meta || !payload?.data) {
       throw new BadRequestException('Invalid backup file format');
     }
-    if (payload.meta.version !== 1) {
+    if (![1, 2].includes(payload.meta.version)) {
       throw new BadRequestException('Unsupported backup version');
+    }
+    if (payload.meta.version === 2 && payload.meta.format !== 'oxycure-backup') {
+      throw new BadRequestException('Backup file is not in Oxycure backup format');
     }
 
     const allowedKeys: Set<string> = new Set(TABLE_CATALOG.map((t) => t.key));
@@ -106,39 +114,35 @@ export class BackupService {
     const orderedEntries = TABLE_CATALOG.filter((t) => tableKeys.includes(t.key));
 
     try {
-      // Disable FK constraint enforcement for the duration of the restore
-      await this.prisma.$executeRawUnsafe(`SET session_replication_role = replica`);
+      return await this.prisma.$transaction(async (tx) => {
+        const tableNames = [...orderedEntries].reverse().map((e) => `"${e.table}"`).join(', ');
+        await tx.$executeRawUnsafe(`TRUNCATE TABLE ${tableNames} CASCADE`);
 
-      // Truncate in reverse order (children first) to avoid FK errors in case
-      // session_replication_role is not supported on managed DBs
-      const reverseEntries = [...orderedEntries].reverse();
-      for (const entry of reverseEntries) {
-        await this.prisma.$executeRawUnsafe(`TRUNCATE TABLE "${entry.table}"`);
-      }
+        // Insert in dependency order (parents first). If one table fails, rollback all.
+        for (const entry of orderedEntries) {
+          const rows = payload.data[entry.key];
+          if (!Array.isArray(rows) || rows.length === 0) continue;
 
-      // Insert in dependency order (parents first)
-      for (const entry of orderedEntries) {
-        const rows = payload.data[entry.key];
-        if (!Array.isArray(rows) || rows.length === 0) continue;
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (this.prisma as any)[entry.key].createMany({
-            data: rows,
-            skipDuplicates: true,
-          });
-        } catch (err) {
-          // Log but continue — one bad table shouldn't abort the whole restore
-          console.error(`[Backup] Failed to restore table "${entry.key}":`, err);
+          try {
+            await (tx as any)[entry.key].createMany({
+              data: rows,
+              skipDuplicates: false,
+            });
+          } catch (err) {
+            const message = (err as Error).message || 'unknown restore error';
+            throw new BadRequestException(`Restore failed for table "${entry.key}": ${message}`);
+          }
         }
-      }
 
-      // Re-enable FK constraint enforcement
-      await this.prisma.$executeRawUnsafe(`SET session_replication_role = DEFAULT`);
-
-      return { restored: orderedEntries.map((e) => e.key) };
+        return {
+          restored: orderedEntries.map((e) => e.key),
+          restoredTables: orderedEntries.length,
+        };
+      });
     } catch (err) {
-      // Safety: always re-enable FK checks even on unexpected errors
-      try { await this.prisma.$executeRawUnsafe(`SET session_replication_role = DEFAULT`); } catch { /* ignore */ }
+      if (err instanceof BadRequestException) {
+        throw err;
+      }
       throw new InternalServerErrorException('Restore failed: ' + (err as Error).message);
     }
   }
