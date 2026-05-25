@@ -62,6 +62,12 @@ export class ProposalsController {
     return this.proposalsService.findOne(id);
   }
 
+  @Get(':id/aging')
+  @ApiOperation({ summary: 'Get time-in-status aging data for a proposal' })
+  getAging(@Param('id', ParseUUIDPipe) id: string) {
+    return this.proposalsService.getAging(id);
+  }
+
   @Patch(':id')
   @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
   @ApiOperation({ summary: 'Update a draft proposal (items, notes, validity)' })
@@ -82,6 +88,16 @@ export class ProposalsController {
     @CurrentUser() user: RequestUser,
   ) {
     return this.proposalsService.updateStatus(id, dto, user);
+  }
+
+  @Post(':id/revise')
+  @Roles(UserRole.admin, UserRole.manager, UserRole.salesperson)
+  @ApiOperation({ summary: 'Create a new draft revision from a rejected/expired/sent proposal' })
+  revise(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return this.proposalsService.revise(id, user);
   }
 
   @Post(':id/follow-ups')

@@ -8,7 +8,7 @@ import { formatCurrency, formatDate, formatFollowUpDate, isOverdue } from '@/lib
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { TableSkeleton } from '@/components/ui/TableSkeleton';
 import { ProposalStatsCards } from '@/components/proposals/proposal-stats-cards';
-import { FileText, Search } from 'lucide-react';
+import { FileText, Search, GitBranch } from 'lucide-react';
 
 const STATUS_FILTER_OPTIONS = [
   { value: '', label: 'All Statuses' },
@@ -116,8 +116,11 @@ export default function ProposalsPage() {
                   validUntil?: string;
                   createdAt: string;
                   nextFollowUpDate?: string | null;
+                  revisionNumber?: number;
+                  parentProposalId?: string | null;
                   ticket?: { referenceId: string; clientName: string; projectName?: string };
                 }) => {
+                  const isRevision = (p.revisionNumber ?? 1) > 1;
                   return (
                     <tr
                       key={p.id}
@@ -125,9 +128,20 @@ export default function ProposalsPage() {
                       className="hover:bg-muted/40 cursor-pointer transition-colors"
                     >
                       <td className="px-6 py-3.5">
-                        <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-semibold text-foreground">
-                          {p.ticket?.referenceId || '—'}
-                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {isRevision && (
+                            <span className="text-muted-foreground/50 text-xs leading-none">↳</span>
+                          )}
+                          <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded font-semibold text-foreground">
+                            {p.ticket?.referenceId || '—'}
+                          </span>
+                          {isRevision && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20">
+                              <GitBranch className="w-2.5 h-2.5" />
+                              Rev {p.revisionNumber}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3.5 font-medium text-foreground">
                         {p.ticket?.clientName || '—'}

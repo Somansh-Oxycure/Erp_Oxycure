@@ -23,6 +23,8 @@ import {
   FileText,
   Download,
   FileDown,
+  RefreshCw,
+  GitBranch,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
@@ -33,6 +35,7 @@ import { useProposalBoQ } from '@/hooks/boq/useProposalBoQ';
 import { useFinalizeBoQ } from '@/hooks/boq/useFinalizeBoQ';
 import { BoQBuilderPanel } from '@/components/boq/BoQBuilderPanel';
 import { BoQViewPanel } from '@/components/boq/BoQViewPanel';
+import { ProposalAgingTimeline } from '@/components/proposals/proposal-aging-timeline';
 
 /** Format a number as Indian Rupee with full locale format */
 function formatINR(amount: number | string | null | undefined): string {
@@ -252,6 +255,20 @@ export default function ProposalDetailPage() {
     onError: () => toast.error('Failed to update follow-up'),
   });
 
+  const reviseMutation = useMutation({
+    mutationFn: () => proposalsApi.revise(id),
+    onSuccess: (res) => {
+      const newId: string = res?.data?.id ?? res?.data?.data?.id;
+      toast.success('Revision created — opening new draft');
+      qc.invalidateQueries({ queryKey: ['proposals'] });
+      if (newId) router.push(`/proposals/${newId}`);
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg || 'Failed to create revision');
+    },
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full min-h-[400px]">
@@ -314,6 +331,12 @@ export default function ProposalDetailPage() {
                         {proposal.ticket?.referenceId || proposal.id.slice(0, 8).toUpperCase()}
                       </span>
                       <StatusBadge status={proposal.status} />
+                      {proposal.revisionNumber > 1 && (
+                        <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-600 border border-violet-500/20">
+                          <GitBranch className="w-3 h-3" />
+                          Rev {proposal.revisionNumber}
+                        </span>
+                      )}
                     </div>
                     <h1 className="text-xl font-bold text-foreground">
                       {proposal.ticket?.projectName || proposal.ticket?.clientName || 'Proposal'}
@@ -328,6 +351,9 @@ export default function ProposalDetailPage() {
                   </div>
                 </div>
               </div>
+
+              {/* ── Proposal Aging ── */}
+              <ProposalAgingTimeline proposalId={id} />
 
               {/* ── Line Items ── */}
               <div className="p-5 rounded-2xl bg-card border border-border">
@@ -414,26 +440,47 @@ export default function ProposalDetailPage() {
                         {proposal.documentOriginalName || 'Proposal Document'}
                       </p>
                     </div>
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'}/proposals/${id}/document/view`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ext = proposal.documentOriginalName?.split('.').pop() ?? 'pdf';
+                        const refId = proposal.ticket?.referenceId ?? id;
+                        const res = await proposalsApi.viewDocument(id);
+                        const blob = new Blob([res.data], { type: res.data.type });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${refId}.${ext}`;
+                        a.target = '_blank';
+                        a.rel = 'noopener noreferrer';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 text-xs font-medium transition-colors shrink-0"
                       title="View document"
                     >
                       <FileText className="w-3.5 h-3.5" />
                       View
-                    </a>
-                    <a
-                      href={`${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'}/proposals/${id}/document/download`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const ext = proposal.documentOriginalName?.split('.').pop() ?? 'pdf';
+                        const refId = proposal.ticket?.referenceId ?? id;
+                        const res = await proposalsApi.downloadDocument(id);
+                        const url = URL.createObjectURL(res.data);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${refId}.${ext}`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 text-xs font-medium transition-colors shrink-0"
                       title="Download document"
                     >
                       <Download className="w-3.5 h-3.5" />
                       Download
-                    </a>
+                    </button>
                   </div>
                 </div>
               )}
@@ -545,11 +592,71 @@ export default function ProposalDetailPage() {
                     <span className="text-muted-foreground">Items</span>
                     <span className="font-medium text-foreground text-xs">{proposal.items?.length || 0}</span>
                   </div>
+                  {proposal.revisionNumber > 1 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Revision</span>
+                      <span className="font-semibold text-violet-600 text-xs">#{proposal.revisionNumber}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
+              {/* ── Revision History ── */}
+              {proposal.revisionChain && proposal.revisionChain.length > 1 && (
+                <div className="p-4 rounded-2xl bg-card border border-border">
+                  <div className="flex items-center gap-2 mb-3">
+                    <GitBranch className="w-3.5 h-3.5 text-violet-500" />
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Revision History ({proposal.revisionChain.length})
+                    </p>
+                  </div>
+                  <div className="space-y-1.5">
+                    {proposal.revisionChain.map((rev, idx) => {
+                      const isCurrent = rev.id === id;
+                      const isOriginal = !rev.parentProposalId;
+                      return (
+                        <button
+                          key={rev.id}
+                          onClick={() => { if (!isCurrent) router.push(`/proposals/${rev.id}`); }}
+                          className={cn(
+                            'w-full text-left p-2.5 rounded-xl border transition-colors',
+                            isCurrent
+                              ? 'bg-violet-500/10 border-violet-500/30 cursor-default'
+                              : 'bg-muted/40 hover:bg-muted/70 border-border cursor-pointer',
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              {/* Visual connector */}
+                              {idx > 0 && (
+                                <span className="text-muted-foreground/40 text-[10px] leading-none">↳</span>
+                              )}
+                              <span className={cn(
+                                'text-xs font-semibold',
+                                isCurrent ? 'text-violet-600' : 'text-violet-500',
+                              )}>
+                                {isOriginal ? 'Original' : `Rev ${rev.revisionNumber}`}
+                              </span>
+                              {isCurrent && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/20 text-violet-600 font-semibold">
+                                  current
+                                </span>
+                              )}
+                            </div>
+                            <StatusBadge status={rev.status} />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5 pl-0.5">
+                            {new Date(rev.createdAt).toLocaleDateString('en-IN', { dateStyle: 'medium' })}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* ── Status Actions ── */}
-              {transitions.length > 0 && role !== 'salesperson' && (
+              {(transitions.length > 0 || ['rejected', 'expired', 'sent'].includes(proposal.status)) && role !== 'salesperson' && (
                 <div className="p-4 rounded-2xl bg-card border border-border">
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Actions</p>
                   <div className="space-y-2">
@@ -577,6 +684,21 @@ export default function ProposalDetailPage() {
                         </button>
                       );
                     })}
+
+                    {/* Revise Proposal — available for rejected, expired, or sent */}
+                    {['rejected', 'expired', 'sent'].includes(proposal.status) && (
+                      <button
+                        onClick={() => reviseMutation.mutate()}
+                        disabled={reviseMutation.isPending}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 bg-violet-600 hover:bg-violet-500 text-white"
+                      >
+                        {reviseMutation.isPending
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <RefreshCw className="w-4 h-4" />
+                        }
+                        Revise Proposal
+                      </button>
+                    )}
                   </div>
 
                   {/* Notes field for non-terminal transitions */}

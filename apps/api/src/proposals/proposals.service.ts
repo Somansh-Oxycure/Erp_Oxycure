@@ -38,6 +38,13 @@ const PROPOSAL_INCLUDE = {
     },
     orderBy: { scheduledAt: 'asc' as const },
   },
+  parentProposal: {
+    select: { id: true, revisionNumber: true, status: true },
+  },
+  revisions: {
+    select: { id: true, revisionNumber: true, status: true, createdAt: true },
+    orderBy: { revisionNumber: 'asc' as const },
+  },
   _count: {
     select: { followUps: true, notes: true },
   },
@@ -135,7 +142,16 @@ export class ProposalsService {
     });
 
     if (!proposal) throw new NotFoundException(`Proposal ${id} not found`);
-    return proposal;
+
+    // Build the full revision chain (original + all its revisions)
+    const rootId = proposal.parentProposalId || proposal.id;
+    const revisionChain = await this.prisma.proposal.findMany({
+      where: { OR: [{ id: rootId }, { parentProposalId: rootId }] },
+      select: { id: true, revisionNumber: true, status: true, createdAt: true, parentProposalId: true },
+      orderBy: { revisionNumber: 'asc' },
+    });
+
+    return { ...proposal, revisionChain };
   }
 
   // ─── Update Proposal ──────────────────────────────────────────────────────
@@ -221,6 +237,9 @@ export class ProposalsService {
       handlePrismaError(err);
     }
 
+    // Record status history transition
+    await this.recordStatusChange(id, proposal.status as ProposalStatus, dto.status, currentUser.id);
+
     // If accepted, mark the ticket as won
     if (dto.status === 'accepted') {
       await this.prisma.ticket.update({
@@ -238,6 +257,201 @@ export class ProposalsService {
     });
 
     return { message: `Status updated to ${dto.status}`, data: updated };
+  }
+
+  // ─── Revise Proposal ──────────────────────────────────────────────────────
+  async revise(id: string, currentUser: { id: string; role: UserRole }) {
+    const original = await this.findOne(id);
+
+    const revisableStatuses: ProposalStatus[] = ['rejected', 'expired', 'sent'];
+    if (!revisableStatuses.includes(original.status)) {
+      throw new BadRequestException(
+        `Can only revise a rejected, expired, or sent proposal. Current status: '${original.status}'`,
+      );
+    }
+
+    // Always link revisions to the root ancestor so the entire chain shares one parent
+    const rootId = original.parentProposalId || original.id;
+
+    // Find the highest revision number across the entire chain
+    const maxRevisionResult = await this.prisma.proposal.aggregate({
+      where: { OR: [{ id: rootId }, { parentProposalId: rootId }] },
+      _max: { revisionNumber: true },
+    });
+    const newRevisionNumber = (maxRevisionResult._max.revisionNumber ?? 1) + 1;
+
+    const revision = await this.prisma.proposal.create({
+      data: {
+        ticketId: original.ticketId,
+        status: ProposalStatus.draft,
+        validUntil: original.validUntil,
+        subtotal: original.subtotal,
+        taxAmount: original.taxAmount,
+        discountAmount: original.discountAmount,
+        totalAmount: original.totalAmount,
+        termsAndConditions: original.termsAndConditions,
+        generateFormData: original.generateFormData as Prisma.InputJsonValue ?? Prisma.JsonNull,
+        parentProposalId: rootId,
+        revisionNumber: newRevisionNumber,
+        createdById: currentUser.id,
+        items: {
+          create: (original.items as {
+            productName: string;
+            description: string | null;
+            quantity: number;
+            unitPrice: Prisma.Decimal;
+            discountPercent: Prisma.Decimal;
+            taxPercent: Prisma.Decimal;
+            totalPrice: Prisma.Decimal;
+          }[]).map((item, index) => ({
+            productName: item.productName,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountPercent: item.discountPercent,
+            taxPercent: item.taxPercent,
+            totalPrice: item.totalPrice,
+            sortOrder: index,
+          })),
+        },
+      },
+      include: PROPOSAL_INCLUDE,
+    });
+
+    await this.auditService.log({
+      userId: currentUser.id,
+      action: 'REVISE',
+      entityType: 'proposals',
+      entityId: revision.id,
+      changes: {
+        before: { originalId: id, status: original.status },
+        after: { revisionNumber: newRevisionNumber, status: 'draft' },
+      },
+    });
+
+    // Seed initial status history for the new revision
+    await this.prisma.proposalStatusHistory.create({
+      data: {
+        proposalId: revision.id,
+        status: 'draft',
+        enteredAt: revision.createdAt,
+        changedById: currentUser.id,
+      },
+    });
+
+    return revision;
+  }
+
+  // ─── Proposal Aging ───────────────────────────────────────────────────────
+  async getAging(id: string) {
+    const proposal = await this.prisma.proposal.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        revisionNumber: true,
+        parentProposalId: true,
+        ticket: { select: { referenceId: true } },
+      },
+    });
+    if (!proposal) throw new NotFoundException(`Proposal ${id} not found`);
+
+    const history = await this.prisma.proposalStatusHistory.findMany({
+      where: { proposalId: id },
+      orderBy: { enteredAt: 'asc' },
+      include: {
+        changedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    const now = new Date();
+    const totalMs = now.getTime() - proposal.createdAt.getTime();
+
+    // If no history yet (existing proposals before this feature), synthesise one entry
+    const entries =
+      history.length > 0
+        ? history.map((h) => {
+            const isActive = h.exitedAt === null;
+            const durationMs = isActive
+              ? BigInt(now.getTime() - h.enteredAt.getTime())
+              : (h.durationMs ?? BigInt(0));
+            return {
+              status: h.status as string,
+              enteredAt: h.enteredAt,
+              exitedAt: h.exitedAt,
+              durationMs: durationMs.toString(),
+              durationDays: Number(durationMs) / (1000 * 60 * 60 * 24),
+              isActive,
+              changedBy: h.changedBy,
+            };
+          })
+        : [
+            {
+              status: proposal.status as string,
+              enteredAt: proposal.createdAt,
+              exitedAt: null,
+              durationMs: BigInt(totalMs).toString(),
+              durationDays: totalMs / (1000 * 60 * 60 * 24),
+              isActive: true,
+              changedBy: null,
+            },
+          ];
+
+    return {
+      proposalId: id,
+      referenceId: proposal.ticket?.referenceId,
+      revisionNumber: proposal.revisionNumber,
+      currentStatus: proposal.status,
+      createdAt: proposal.createdAt,
+      totalAgeDays: totalMs / (1000 * 60 * 60 * 24),
+      statusHistory: entries,
+    };
+  }
+
+  // ─── Internal: record a status transition in ProposalStatusHistory ─────────
+  async recordStatusChange(
+    proposalId: string,
+    fromStatus: ProposalStatus,
+    toStatus: ProposalStatus,
+    changedById: string,
+  ) {
+    const now = new Date();
+    // Close the current open entry
+    const current = await this.prisma.proposalStatusHistory.findFirst({
+      where: { proposalId, exitedAt: null },
+      orderBy: { enteredAt: 'desc' },
+    });
+    if (current) {
+      const durationMs = BigInt(now.getTime() - current.enteredAt.getTime());
+      await this.prisma.proposalStatusHistory.update({
+        where: { id: current.id },
+        data: { exitedAt: now, durationMs },
+      });
+    } else {
+      // If no history exists yet, create a synthetic closed entry for the previous status
+      const proposal = await this.prisma.proposal.findUnique({
+        where: { id: proposalId },
+        select: { createdAt: true },
+      });
+      if (proposal) {
+        const durationMs = BigInt(now.getTime() - proposal.createdAt.getTime());
+        await this.prisma.proposalStatusHistory.create({
+          data: {
+            proposalId,
+            status: fromStatus,
+            enteredAt: proposal.createdAt,
+            exitedAt: now,
+            durationMs,
+            changedById,
+          },
+        });
+      }
+    }
+    // Open a new entry for the new status
+    await this.prisma.proposalStatusHistory.create({
+      data: { proposalId, status: toStatus, enteredAt: now, changedById },
+    });
   }
 
   // ─── Stats ────────────────────────────────────────────────────────────────

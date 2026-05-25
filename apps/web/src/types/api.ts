@@ -125,6 +125,8 @@ export interface Proposal {
   documentUrl?: string | null;
   documentOriginalName?: string | null;
   termsAndConditions?: string | null;
+  revisionNumber: number;
+  parentProposalId?: string | null;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -141,6 +143,9 @@ export interface Proposal {
   createdBy?: UserSummary;
   items: ProposalItem[];
   notes: ProposalNote[];
+  parentProposal?: { id: string; revisionNumber: number; status: string } | null;
+  revisions?: Array<{ id: string; revisionNumber: number; status: string; createdAt: string }>;
+  revisionChain?: Array<{ id: string; revisionNumber: number; status: string; createdAt: string; parentProposalId: string | null }>;
 }
 
 /** Lightweight reference included on Ticket.proposals[] */

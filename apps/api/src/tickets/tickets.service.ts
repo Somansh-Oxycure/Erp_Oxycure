@@ -252,8 +252,10 @@ export class TicketsService {
             totalAmount: true,
             validUntil: true,
             createdAt: true,
+            revisionNumber: true,
+            parentProposalId: true,
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
@@ -495,6 +497,16 @@ export class TicketsService {
           content: `Ticket converted to proposal (REF: ${ticket.referenceId})`,
           type: NoteType.status_change,
           createdById: currentUser.id,
+        },
+      });
+
+      // Seed initial proposal status history
+      await tx.proposalStatusHistory.create({
+        data: {
+          proposalId: proposal.id,
+          status: 'draft',
+          enteredAt: proposal.createdAt,
+          changedById: currentUser.id,
         },
       });
 

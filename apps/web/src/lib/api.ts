@@ -190,6 +190,14 @@ export const proposalsApi = {
     api.post('/proposals/generate', data, { responseType: 'arraybuffer' }),
   generateAndSave: (id: string, data: unknown) =>
     api.post(`/proposals/${id}/generate`, data, { responseType: 'arraybuffer' }),
+  viewDocument: (id: string) =>
+    api.get(`/proposals/${id}/document/view`, { responseType: 'blob' }),
+  downloadDocument: (id: string) =>
+    api.get(`/proposals/${id}/document/download`, { responseType: 'blob' }),
+  revise: (id: string) =>
+    api.post(`/proposals/${id}/revise`, {}),
+  aging: (id: string) =>
+    api.get(`/proposals/${id}/aging`),
 };
 
 export const opportunitiesApi = {

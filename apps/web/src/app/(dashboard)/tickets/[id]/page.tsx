@@ -35,7 +35,7 @@ import {
 } from '@/lib/utils';
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { TicketAgingTimeline } from '@/components/tickets/ticket-aging-timeline';
+import { TicketProposalAging } from '@/components/tickets/ticket-proposal-aging';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { useRole } from '@/hooks/useRole';
@@ -258,8 +258,11 @@ export default function TicketFullViewPage() {
                 </div>
               </div>
 
-              {/* â”€â”€ Aging Timeline â”€â”€ */}
-              <TicketAgingTimeline ticketId={ticketId} />
+              {/* Deal Aging (Ticket + Proposals) */}
+              <TicketProposalAging
+                ticketId={ticketId}
+                proposals={ticket.proposals || []}
+              />
 
               {/* â”€â”€ Client & Contact â”€â”€ */}
               <EditableSection

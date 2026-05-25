@@ -27,7 +27,7 @@ function LoginForm() {
     try {
       await login(email, password);
       toast.success('Welcome back!');
-      router.push('/leads');
+      router.push('/');
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||

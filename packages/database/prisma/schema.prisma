@@ -216,8 +216,9 @@ model User {
   ticketNotes             TicketNote[]
   ticketFollowUps         TicketFollowUp[]      @relation("TicketFollowUpCreatedBy")
   ticketStatusHistories   TicketStatusHistory[] @relation("StatusHistoryChangedBy")
-  proposalFollowUps       ProposalFollowUp[]    @relation("ProposalFollowUpCreatedBy")
-  proposalNotes           ProposalNote[]
+  proposalFollowUps            ProposalFollowUp[]         @relation("ProposalFollowUpCreatedBy")
+  proposalNotes                ProposalNote[]
+  proposalStatusHistories      ProposalStatusHistory[]    @relation("ProposalStatusHistoryChangedBy")
 
   // Other relations
   createdQuotations     Quotation[]
@@ -440,19 +441,25 @@ model Proposal {
   termsAndConditions   String?        @map("terms_and_conditions") @db.Text
   nextFollowUpDate     DateTime?      @map("next_follow_up_date") @db.Date
   generateFormData     Json?          @map("generate_form_data")
+  revisionNumber       Int            @default(1) @map("revision_number")
+  parentProposalId     String?        @map("parent_proposal_id")
   createdById          String         @map("created_by")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
 
-  ticket    Ticket               @relation(fields: [ticketId], references: [id])
-  createdBy User                 @relation("CreatedProposals", fields: [createdById], references: [id])
-  items     ProposalItem[]
-  notes     ProposalNote[]
-  followUps ProposalFollowUp[]
-  boq       BoQ?
+  ticket         Ticket               @relation(fields: [ticketId], references: [id])
+  createdBy      User                 @relation("CreatedProposals", fields: [createdById], references: [id])
+  parentProposal Proposal?            @relation("ProposalRevisions", fields: [parentProposalId], references: [id])
+  revisions      Proposal[]           @relation("ProposalRevisions")
+  items          ProposalItem[]
+  notes          ProposalNote[]
+  followUps      ProposalFollowUp[]
+  statusHistory  ProposalStatusHistory[]
+  boq            BoQ?
 
   @@index([ticketId])
   @@index([status])
+  @@index([parentProposalId])
   @@map("proposals")
 }
 
@@ -596,6 +603,22 @@ model TicketStatusHistory {
 
   @@index([ticketId])
   @@map("ticket_status_history")
+}
+
+model ProposalStatusHistory {
+  id          String         @id @default(uuid())
+  proposalId  String         @map("proposal_id")
+  status      ProposalStatus
+  enteredAt   DateTime       @map("entered_at")
+  exitedAt    DateTime?      @map("exited_at")
+  durationMs  BigInt?        @map("duration_ms")
+  changedById String         @map("changed_by")
+
+  proposal  Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  changedBy User     @relation("ProposalStatusHistoryChangedBy", fields: [changedById], references: [id])
+
+  @@index([proposalId])
+  @@map("proposal_status_history")
 }
 
 model AuditLog {
