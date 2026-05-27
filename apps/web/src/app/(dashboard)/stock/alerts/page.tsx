@@ -126,6 +126,9 @@ export default function AlertsPage() {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium text-foreground">{log.product?.name}</p>
                       <span className="text-xs text-muted-foreground">{log.product?.productCode}</span>
+                      {log.product?.categoryName && (
+                        <span className="text-xs bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400 px-2 py-0.5 rounded-full">{log.product.categoryName}</span>
+                      )}
                     </div>
                     <p className="text-sm text-foreground/70 mt-0.5">{log.alertMessage}</p>
                     <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">

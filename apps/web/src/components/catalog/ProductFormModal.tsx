@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { productsApi } from '@/lib/api';
-import { Product, ProductSpecInput, CreateProductInput, UnitOfMeasure } from '@/types/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { productsApi, productCategoriesApi } from '@/lib/api';
+import { Product, ProductCategory, ProductSpecInput, CreateProductInput, UnitOfMeasure } from '@/types/api';
 import { X, Plus, Trash2, ChevronRight, ChevronLeft, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -65,10 +65,19 @@ export function ProductFormModal({ open, onClose, product }: Props) {
   const isEdit = !!product;
 
   const [step, setStep] = useState(1);
+  const [addingNewCat, setAddingNewCat] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+  const { data: catData } = useQuery({
+    queryKey: ['categories-flat'],
+    queryFn: () => productCategoriesApi.findFlat().then((r) => r.data.data),
+    staleTime: 300000,
+  });
+  const categories: ProductCategory[] = catData ?? [];
 
   // Step 1 fields
   const [form, setForm] = useState<Partial<CreateProductInput>>({
-    productCode: '', name: '', brand: '', categoryName: '', subCategory: '',
+    productCode: '', name: '', brand: '', categoryName: '', categoryId: '', subCategory: '',
     unitOfMeasure: 'pcs', status: 'active', description: '', location: '', tags: [],
   });
   const [tagInput, setTagInput] = useState('');
@@ -80,11 +89,14 @@ export function ProductFormModal({ open, onClose, product }: Props) {
   useEffect(() => {
     if (!open) return;
     if (product) {
+      setAddingNewCat(false);
+      setNewCategoryName('');
       setForm({
         productCode: product.productCode,
         name: product.name,
         brand: product.brand ?? '',
         categoryName: product.categoryName ?? '',
+        categoryId: product.category?.id ?? '',
         subCategory: product.subCategory ?? '',
         unitOfMeasure: product.unitOfMeasure,
         status: product.status,
@@ -101,7 +113,9 @@ export function ProductFormModal({ open, onClose, product }: Props) {
         })) ?? [],
       );
     } else {
-      setForm({ productCode: '', name: '', brand: '', categoryName: '', subCategory: '', unitOfMeasure: 'pcs', status: 'active', description: '', location: '', tags: [] });
+      setAddingNewCat(false);
+      setNewCategoryName('');
+      setForm({ productCode: '', name: '', brand: '', categoryName: '', categoryId: '', subCategory: '', unitOfMeasure: 'pcs', status: 'active', description: '', location: '', tags: [] });
       setSpecs([]);
     }
     setStep(1);
@@ -269,12 +283,39 @@ export function ProductFormModal({ open, onClose, product }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Category</label>
-                  <input
-                    value={form.categoryName ?? ''}
-                    onChange={(e) => setForm((f) => ({ ...f, categoryName: e.target.value }))}
-                    placeholder="e.g. Split AC, Compressor, Refrigerant"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400"
-                  />
+                  <select
+                    value={addingNewCat ? '__new__' : (form.categoryId ?? '')}
+                    onChange={(e) => {
+                      if (e.target.value === '__new__') {
+                        setAddingNewCat(true);
+                        setNewCategoryName('');
+                        setForm((f) => ({ ...f, categoryId: '', categoryName: '' }));
+                      } else {
+                        setAddingNewCat(false);
+                        setNewCategoryName('');
+                        const cat = categories.find((c) => c.id === e.target.value);
+                        setForm((f) => ({ ...f, categoryId: e.target.value, categoryName: cat?.name ?? '' }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400 bg-white"
+                  >
+                    <option value="">— Select category —</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                    <option value="__new__">+ Add new category…</option>
+                  </select>
+                  {addingNewCat && (
+                    <input
+                      value={newCategoryName}
+                      onChange={(e) => {
+                        setNewCategoryName(e.target.value);
+                        setForm((f) => ({ ...f, categoryName: e.target.value, categoryId: '' }));
+                      }}
+                      placeholder="New category name"
+                      className="mt-2 w-full px-3 py-2 rounded-xl border border-sky-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-400"
+                    />
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Sub-Category</label>

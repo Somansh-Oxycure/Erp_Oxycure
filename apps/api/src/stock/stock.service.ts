@@ -357,7 +357,6 @@ export class StockService {
     const products = await this.prisma.product.findMany({
       where: { status: 'active' },
       include: {
-        category: { select: { name: true } },
         stockLevel: true,
       },
       orderBy: { name: 'asc' },
@@ -374,7 +373,7 @@ export class StockService {
       rows.push([
         this.escapeCsvValue(p.productCode),
         this.escapeCsvValue(p.name),
-        this.escapeCsvValue(p.category?.name ?? ''),
+        this.escapeCsvValue(p.categoryName ?? ''),
         this.escapeCsvValue(p.unitOfMeasure),
         this.escapeCsvValue(Number(sl?.qtyOnHand ?? 0)),
         this.escapeCsvValue(Number(sl?.qtyOnOrder ?? 0)),

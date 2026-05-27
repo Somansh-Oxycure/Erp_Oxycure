@@ -3,9 +3,27 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto, UpdateProductDto, QueryProductDto } from './dto/product.dto';
 import { Prisma } from '@prisma/client';
 
+function slugify(text: string): string {
+  return text.toLowerCase().trim().replace(/[\s]+/g, '-').replace(/[^\w-]/g, '').replace(/--+/g, '-');
+}
+
 @Injectable()
 export class ProductsService {
   constructor(private prisma: PrismaService) {}
+
+  // ─── Resolve (or create) a ProductCategory from a name string ─────────────
+  private async resolveCategoryId(name: string): Promise<string> {
+    const trimmed = name.trim();
+    let cat = await this.prisma.productCategory.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' } },
+    });
+    if (!cat) {
+      cat = await this.prisma.productCategory.create({
+        data: { name: trimmed, slug: slugify(trimmed) },
+      });
+    }
+    return cat.id;
+  }
 
   // ─── List / Search ─────────────────────────────────────────────────────────
   async findAll(query: QueryProductDto) {
@@ -124,13 +142,21 @@ export class ProductsService {
     const productCode = dto.productCode?.trim()
       ? dto.productCode.trim().toUpperCase()
       : await this.generateProductCode(dto.name, dto.brand);
+
+    const resolvedCategoryName = dto.categoryName?.trim() || null;
+    let resolvedCategoryId: string | null = dto.categoryId ?? null;
+    if (resolvedCategoryName && !resolvedCategoryId) {
+      resolvedCategoryId = await this.resolveCategoryId(resolvedCategoryName);
+    }
+
     try {
       const product = await this.prisma.product.create({
         data: {
           productCode,
           name: dto.name,
           brand: dto.brand,
-          categoryName: dto.categoryName?.trim() || null,
+          categoryName: resolvedCategoryName,
+          categoryId: resolvedCategoryId,
           subCategory: dto.subCategory,
           unitOfMeasure: (dto.unitOfMeasure as Prisma.EnumUnitOfMeasureFilter['equals']) ?? 'pcs',
           description: dto.description,
@@ -182,13 +208,24 @@ export class ProductsService {
         }
       }
 
+      const categoryUpdates: { categoryName?: string | null; categoryId?: string | null } = {};
+      if (dto.categoryName !== undefined) {
+        const resolvedName = dto.categoryName?.trim() || null;
+        categoryUpdates.categoryName = resolvedName;
+        if (resolvedName) {
+          categoryUpdates.categoryId = await this.resolveCategoryId(resolvedName);
+        } else {
+          categoryUpdates.categoryId = null;
+        }
+      }
+
       const product = await this.prisma.product.update({
         where: { id },
         data: {
           ...(dto.productCode !== undefined && { productCode: dto.productCode }),
           ...(dto.name !== undefined && { name: dto.name }),
           ...(dto.brand !== undefined && { brand: dto.brand }),
-          ...(dto.categoryName !== undefined && { categoryName: dto.categoryName?.trim() || null }),
+          ...categoryUpdates,
           ...(dto.subCategory !== undefined && { subCategory: dto.subCategory }),
           ...(dto.unitOfMeasure !== undefined && { unitOfMeasure: dto.unitOfMeasure as Prisma.EnumUnitOfMeasureFilter['equals'] }),
           ...(dto.description !== undefined && { description: dto.description }),

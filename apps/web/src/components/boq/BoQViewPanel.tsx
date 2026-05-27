@@ -225,7 +225,7 @@ function buildPrintHTML(boq: BoQ): string {
   const installTh = anyItemizedCharges ? `<th class="td-r" style="width:85px">Installation</th>` : '';
   const freightTh  = anyItemizedCharges ? `<th class="td-r" style="width:70px">Freight</th>` : '';
   const labourTh   = anyItemizedCharges ? `<th class="td-r" style="width:70px">Labour</th>` : '';
-  const chargesTh  = anyCharges ? `<th class="td-r" style="width:100px">${anyItemizedCharges ? 'Other' : 'Installation2q '}</th>` : '';
+  const chargesTh  = anyCharges ? `<th class="td-r" style="width:100px">${anyItemizedCharges ? 'Other' : 'Installation'}</th>` : '';
   const totalTh    = anyCharges ? `<th class="td-r" style="width:115px">Grand Total</th>` : '';
 
   const installFt = anyItemizedCharges ? `<td></td>` : '';

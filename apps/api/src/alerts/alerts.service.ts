@@ -16,7 +16,7 @@ export class AlertsService {
     const data = await this.prisma.alertLog.findMany({
       where,
       include: {
-        product: { select: { id: true, productCode: true, name: true } },
+        product: { select: { id: true, productCode: true, name: true, categoryName: true } },
         rule: { select: { id: true, ruleName: true, ruleType: true } },
         resolvedBy: { select: { id: true, firstName: true, lastName: true } },
       },

@@ -417,7 +417,7 @@ export interface StockWithProduct {
   productCode: string;
   name: string;
   brand: string | null;
-  category: { id: string; name: string } | null;
+  categoryName: string | null;
   unitOfMeasure: UnitOfMeasure;
   status: ProductStatus;
   location: string | null;
@@ -520,7 +520,7 @@ export interface AlertLog {
   resolvedAt: string | null;
   resolvedById: string | null;
   rule?: { id: string; ruleName: string; ruleType: AlertRuleType };
-  product?: { id: string; productCode: string; name: string };
+  product?: { id: string; productCode: string; name: string; categoryName: string | null };
   resolvedBy?: { id: string; firstName: string; lastName: string } | null;
 }
 

@@ -268,7 +268,8 @@ export default function StockPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.category?.name ?? '—'}</td>                      <td className="px-4 py-3 text-muted-foreground">{p.location ?? '\u2014'}</td>                      <td className="px-4 py-3 text-right font-mono text-foreground">{p.onHand.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{p.categoryName ?? '—'}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{p.location ?? '—'}</td>                      <td className="px-4 py-3 text-right font-mono text-foreground">{p.onHand.toFixed(2)}</td>
                       <td className="px-4 py-3 text-right font-mono text-sky-600 dark:text-sky-400">{p.onOrder.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`text-xs px-2 py-0.5 rounded-full ${badge.className}`}>{badge.label}</span>

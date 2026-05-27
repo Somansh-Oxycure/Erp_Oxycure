@@ -33,6 +33,13 @@ export class ProductCategoriesController {
     return this.service.findOne(id);
   }
 
+  @Post('sync-from-products')
+  @Roles('admin', 'manager')
+  @ApiOperation({ summary: 'Sync ProductCategory table from distinct product categoryName values' })
+  syncFromProducts() {
+    return this.service.syncFromProducts();
+  }
+
   @Post()
   @Roles('admin', 'manager')
   @ApiOperation({ summary: 'Create a product category' })
