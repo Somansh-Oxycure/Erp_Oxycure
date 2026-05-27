@@ -390,9 +390,14 @@ export class BoQService {
 
     const validTransitions: Record<BoQStatus, BoQStatus[]> = {
       draft:    ['final'],
-      final:    ['archived'],
+      final:    ['draft', 'archived'],
       archived: [],
     };
+
+    // Only admins/managers can reopen a finalized BoQ
+    if (dto.status === 'draft' && boq.status === 'final' && user.role === 'salesperson') {
+      throw new ForbiddenException('Only managers or admins can reopen a finalized BoQ');
+    }
 
     if (!validTransitions[boq.status]?.includes(dto.status)) {
       throw new BadRequestException(

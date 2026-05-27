@@ -33,6 +33,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useRole } from '@/hooks/useRole';
 import { useProposalBoQ } from '@/hooks/boq/useProposalBoQ';
 import { useFinalizeBoQ } from '@/hooks/boq/useFinalizeBoQ';
+import { useReopenBoQ } from '@/hooks/boq/useReopenBoQ';
 import { BoQBuilderPanel } from '@/components/boq/BoQBuilderPanel';
 import { BoQViewPanel } from '@/components/boq/BoQViewPanel';
 import { ProposalAgingTimeline } from '@/components/proposals/proposal-aging-timeline';
@@ -85,7 +86,10 @@ function BoQSection({
   const proposalEditable = !['rejected', 'expired'].includes(proposalStatus);
   const canFinalize = role === 'admin' || role === 'manager';
 
+  const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
+  const [reopenConfirmOpen, setReopenConfirmOpen] = useState(false);
   const finalizeMutation = useFinalizeBoQ(boq?.id ?? '', proposalId);
+  const reopenMutation = useReopenBoQ(boq?.id ?? '', proposalId);
 
   if (boqLoading) {
     return (
@@ -143,7 +147,7 @@ function BoQSection({
                 </button>
                 {canFinalize && (
                   <button
-                    onClick={() => finalizeMutation.mutate()}
+                    onClick={() => setFinalizeConfirmOpen(true)}
                     disabled={finalizeMutation.isPending}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors shadow-sm disabled:opacity-60"
                   >
@@ -151,6 +155,15 @@ function BoQSection({
                   </button>
                 )}
               </>
+            )}
+            {boq && boq.status === 'final' && canFinalize && (
+              <button
+                onClick={() => setReopenConfirmOpen(true)}
+                disabled={reopenMutation.isPending}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 text-xs font-semibold transition-colors border border-amber-500/30 disabled:opacity-60"
+              >
+                Reopen BoQ
+              </button>
             )}
             {boq && (boq.status === 'draft' || boq.status === 'final') && (
               <button
@@ -179,6 +192,40 @@ function BoQSection({
       {boqMode === 'view' && boq && (
         <BoQViewPanel boq={boq} onBack={() => setBoqMode(null)} />
       )}
+
+      {/* ── Finalize confirmation ── */}
+      <ConfirmDialog
+        open={finalizeConfirmOpen}
+        title="Finalize Bill of Quantities?"
+        description="Once finalized, you will not be able to make any changes to this BoQ. This action is permanent unless an admin reopens it."
+        confirmLabel="Yes, Finalize"
+        variant="danger"
+        isPending={finalizeMutation.isPending}
+        onConfirm={() => {
+          finalizeMutation.mutate(undefined, {
+            onSuccess: () => setFinalizeConfirmOpen(false),
+            onError: () => setFinalizeConfirmOpen(false),
+          });
+        }}
+        onCancel={() => setFinalizeConfirmOpen(false)}
+      />
+
+      {/* ── Reopen confirmation ── */}
+      <ConfirmDialog
+        open={reopenConfirmOpen}
+        title="Reopen BoQ for Editing?"
+        description="This will move the BoQ back to draft status so it can be edited again."
+        confirmLabel="Yes, Reopen"
+        variant="default"
+        isPending={reopenMutation.isPending}
+        onConfirm={() => {
+          reopenMutation.mutate(undefined, {
+            onSuccess: () => setReopenConfirmOpen(false),
+            onError: () => setReopenConfirmOpen(false),
+          });
+        }}
+        onCancel={() => setReopenConfirmOpen(false)}
+      />
     </div>
   );
 }
